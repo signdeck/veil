@@ -189,6 +189,15 @@ class Veil
             $values = Value::parse($rowValues);
             $newValues = [];
 
+            // Build the row array with column names as keys for callable access
+            $row = [];
+            foreach ($columnMapping as $columnName => $mapping) {
+                $originalIndex = $mapping['originalIndex'];
+                if (isset($values[$originalIndex])) {
+                    $row[$columnName] = Value::unformat($values[$originalIndex]);
+                }
+            }
+
             foreach ($columnMapping as $columnName => $mapping) {
                 $originalIndex = $mapping['originalIndex'];
                 $anonymizedValue = $mapping['value'];
@@ -206,8 +215,8 @@ class Veil
                     // Preserve NULL values
                     $newValues[] = 'NULL';
                 } elseif (is_callable($anonymizedValue)) {
-                    // Execute callable and format the result
-                    $result = $anonymizedValue(Value::unformat($originalValue));
+                    // Execute callable with original value and full row data
+                    $result = $anonymizedValue(Value::unformat($originalValue), $row);
                     $newValues[] = Value::format($result);
                 } else {
                     // Apply anonymization

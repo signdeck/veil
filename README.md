@@ -84,7 +84,9 @@ public function columns(): array
 
 ### Using Callables for Dynamic Values
 
-You can use closures or callables to generate unique values per row. The callable receives the original value as an argument:
+You can use closures or callables to generate unique values per row. The callable receives:
+- `$original` — the original value of the column
+- `$row` — an array of all column values in the current row
 
 ```php
 public function columns(): array
@@ -98,13 +100,16 @@ public function columns(): array
         // Transform the original value
         'name' => fn ($original) => strtoupper($original),
         
-        // Generate random data
-        'phone' => fn () => fake()->phoneNumber(),
+        // Access other columns via $row parameter
+        'email' => fn ($original, $row) => "user{$row['id']}@example.com",
+        
+        // Combine multiple column values
+        'display_name' => fn ($original, $row) => "{$row['name']} (ID: {$row['id']})",
     ];
 }
 ```
 
-This is useful when you need unique anonymized values per row instead of the same static value for all rows.
+This is useful when you need unique anonymized values per row or want to reference other columns in the transformation.
 
 ### 3. Register Your Tables
 

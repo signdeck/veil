@@ -243,6 +243,34 @@ class VeilTest extends TestCase
         $this->assertStringContainsString('(102)', $result);
     }
 
+    /** @test */
+    public function callable_can_access_other_columns_via_row_parameter(): void
+    {
+        $sql = $this->getMySqlDump();
+
+        $veilTable = new RowAccessVeilTable();
+        $result = $this->callProcessTableInSql($sql, $veilTable);
+
+        // Email should be formatted using the id from the row
+        $this->assertStringContainsString('user1@example.com', $result);
+        $this->assertStringContainsString('user2@example.com', $result);
+        $this->assertStringContainsString('user3@example.com', $result);
+    }
+
+    /** @test */
+    public function callable_can_combine_multiple_row_values(): void
+    {
+        $sql = $this->getMySqlDump();
+
+        $veilTable = new MultiColumnRowAccessVeilTable();
+        $result = $this->callProcessTableInSql($sql, $veilTable);
+
+        // Name should be formatted using id
+        $this->assertStringContainsString('Anonymous User #1', $result);
+        $this->assertStringContainsString('Anonymous User #2', $result);
+        $this->assertStringContainsString('Anonymous User #3', $result);
+    }
+
     /**
      * Helper to call the protected processTableInSql method.
      */
@@ -431,6 +459,39 @@ class CallableWithOriginalValueVeilTable implements VeilTable
         return [
             'id' => Veil::unchanged(),
             'email' => fn ($original) => $original . '.redacted',
+        ];
+    }
+}
+
+class RowAccessVeilTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'email' => fn ($original, $row) => "user{$row['id']}@example.com",
+        ];
+    }
+}
+
+class MultiColumnRowAccessVeilTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'name' => fn ($original, $row) => "Anonymous User #{$row['id']}",
+            'email' => fn ($original, $row) => "anon{$row['id']}@example.com",
         ];
     }
 }
