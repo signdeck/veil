@@ -2,8 +2,10 @@
 
 namespace SignDeck\Veil\Tests\Tables;
 
-use SignDeck\Veil\Veil;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use SignDeck\Veil\Contracts\VeilTable;
+use SignDeck\Veil\Veil;
 
 class VeilUsersTable implements VeilTable
 {
@@ -19,5 +21,10 @@ class VeilUsersTable implements VeilTable
             'email' => 'user@example.com', // Anonymize to this value
             'name' => 'John Doe',          // Anonymize to this value
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }

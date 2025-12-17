@@ -2,8 +2,11 @@
 
 namespace DummyNamespace;
 
-use SignDeck\Veil\Veil;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 use SignDeck\Veil\Contracts\VeilTable;
+use SignDeck\Veil\Veil;
 
 class DummyClass implements VeilTable
 {
@@ -25,5 +28,16 @@ class DummyClass implements VeilTable
         //     'email' => 'user@example.com',                // Replace with static value
         //     'name' => fn ($original) => fake()->name(),   // Use Faker for unique values
         // ];
+    }
+
+    /**
+     * Define a query scope to filter the rows are exported. 
+     * 
+     * - Return null to export all rows.
+     */
+    public function query(): Builder|QueryBuilder|null
+    {
+        // return DB::table('users')->where('created_at', '>', now()->subYear());
+        // return null; // Export all rows
     }
 }

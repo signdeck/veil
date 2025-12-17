@@ -160,6 +160,51 @@ class VeilUsersTable implements VeilTable
 
 **Rule of thumb:** Only anonymize data columns (names, emails, addresses), never identifier columns (IDs, UUIDs, foreign keys).
 
+### Row Filtering (Query Scope)
+
+You must define a `query()` method to filter which rows are exported. Return `null` to export all rows:
+
+```php
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
+use SignDeck\Veil\Veil;
+use SignDeck\Veil\Contracts\VeilTable;
+
+class VeilUsersTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'email' => 'redacted@example.com',
+        ];
+    }
+
+    /**
+     * Only export users created in the last year.
+     * Return null to export all rows.
+     */
+    public function query(): Builder|QueryBuilder|null
+    {
+        return DB::table('users')
+            ->where('created_at', '>', now()->subYear());
+        
+        // Or return null to export all rows:
+        // return null;
+    }
+}
+```
+
+The query should return a Laravel query builder instance that filters the rows you want to export. Return `null` to export all rows.
+
+**Note:** Filtering is based on the primary key (usually `id`). The query is executed to get matching IDs, and only rows with those IDs are included in the export.
+
 ### 3. Register Your Tables
 
 Add your Veil table classes to `config/veil.php`:
@@ -192,7 +237,7 @@ This will create `staging-export.sql` instead of the timestamped filename.
 
 ## Dry Run Mode
 
-Preview what would be exported without actually creating the file:
+You can preview what would be exported without actually creating the file:
 
 ```bash
 php artisan veil:export --dry-run

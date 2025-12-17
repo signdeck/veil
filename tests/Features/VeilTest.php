@@ -2,6 +2,9 @@
 
 namespace SignDeck\Veil\Tests\Features;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
 use SignDeck\Veil\Contracts\VeilTable;
@@ -273,6 +276,11 @@ class VeilTest extends TestCase
                     },
                 ];
             }
+
+            public function query(): Builder|QueryBuilder|null
+            {
+                return null;
+            }
         };
 
         $result = $this->callProcessTableInSql($sql, $veilTable);
@@ -309,6 +317,57 @@ class VeilTest extends TestCase
         $this->assertStringContainsString('Anonymous User #1', $result);
         $this->assertStringContainsString('Anonymous User #2', $result);
         $this->assertStringContainsString('Anonymous User #3', $result);
+    }
+
+    /** @test */
+    public function it_filters_rows_based_on_query_scope(): void
+    {
+        // Insert test data
+        $this->app['db']->table('users')->insert([
+            ['id' => 1, 'name' => 'User 1', 'email' => 'user1@example.com', 'password' => 'secret'],
+            ['id' => 2, 'name' => 'User 2', 'email' => 'user2@example.com', 'password' => 'secret'],
+            ['id' => 3, 'name' => 'User 3', 'email' => 'user3@example.com', 'password' => 'secret'],
+        ]);
+
+        $sql = $this->getMySqlDump();
+        $veilTable = new FilteredVeilTable();
+
+        // Get allowed IDs from query
+        $veil = app(Veil::class);
+        $reflection = new ReflectionClass($veil);
+        $method = $reflection->getMethod('getAllowedIds');
+        $method->setAccessible(true);
+        $allowedIds = $method->invoke($veil, $veilTable);
+
+        $this->assertEquals([1], $allowedIds);
+
+        // Test filtering in SQL processing
+        $processMethod = $reflection->getMethod('processTableInSql');
+        $processMethod->setAccessible(true);
+        $result = $processMethod->invoke($veil, $sql, $veilTable, $allowedIds);
+
+        // Should only contain user with id = 1 (filtered by query)
+        $this->assertStringContainsString('(1,', $result);
+        $this->assertStringNotContainsString('(2,', $result);
+        $this->assertStringNotContainsString('(3,', $result);
+    }
+
+    /** @test */
+    public function it_exports_all_rows_when_query_not_defined(): void
+    {
+        $sql = $this->getMySqlDump();
+        $veilTable = new TestVeilUsersTable();
+
+        $veil = app(Veil::class);
+        $reflection = new ReflectionClass($veil);
+        $method = $reflection->getMethod('processTableInSql');
+        $method->setAccessible(true);
+        $result = $method->invoke($veil, $sql, $veilTable, null);
+
+        // Should contain all users when no filtering
+        $this->assertStringContainsString('(1,', $result);
+        $this->assertStringContainsString('(2,', $result);
+        $this->assertStringContainsString('(3,', $result);
     }
 
     /**
@@ -360,6 +419,11 @@ class TestVeilUsersTable implements VeilTable
             'email' => 'test@example.com',
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class PartialColumnsVeilTable implements VeilTable
@@ -377,6 +441,11 @@ class PartialColumnsVeilTable implements VeilTable
             // name and password are intentionally excluded
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class AnonymizedVeilTable implements VeilTable
@@ -392,6 +461,11 @@ class AnonymizedVeilTable implements VeilTable
             'id' => Veil::unchanged(),
             'email' => 'redacted@example.com',
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }
 
@@ -409,6 +483,11 @@ class UnchangedColumnsVeilTable implements VeilTable
             'email' => 'anon@test.com',
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class NullableColumnsVeilTable implements VeilTable
@@ -425,6 +504,11 @@ class NullableColumnsVeilTable implements VeilTable
             'created_at' => '2024-01-01 00:00:00',
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class NumericAnonymizedVeilTable implements VeilTable
@@ -439,6 +523,11 @@ class NumericAnonymizedVeilTable implements VeilTable
         return [
             'id' => 999,
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }
 
@@ -456,6 +545,11 @@ class QuotedValueVeilTable implements VeilTable
             'name' => "O'Brien",
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class EmptyColumnsVeilTable implements VeilTable
@@ -468,6 +562,11 @@ class EmptyColumnsVeilTable implements VeilTable
     public function columns(): array
     {
         return [];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }
 
@@ -485,6 +584,11 @@ class CallableVeilTable implements VeilTable
             'email' => fn ($original) => strtoupper($original),
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class CallableWithOriginalValueVeilTable implements VeilTable
@@ -500,6 +604,11 @@ class CallableWithOriginalValueVeilTable implements VeilTable
             'id' => Veil::unchanged(),
             'email' => fn ($original) => $original . '.redacted',
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }
 
@@ -517,6 +626,11 @@ class RowAccessVeilTable implements VeilTable
             'email' => fn ($original, $row) => "user{$row['id']}@example.com",
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class MultiColumnRowAccessVeilTable implements VeilTable
@@ -533,6 +647,32 @@ class MultiColumnRowAccessVeilTable implements VeilTable
             'name' => fn ($original, $row) => "Anonymous User #{$row['id']}",
             'email' => fn ($original, $row) => "anon{$row['id']}@example.com",
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
+}
+
+class FilteredVeilTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'email' => 'redacted@example.com',
+        ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return DB::table('users')->where('id', 1);
     }
 }
 

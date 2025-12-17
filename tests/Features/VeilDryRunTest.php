@@ -2,6 +2,8 @@
 
 namespace SignDeck\Veil\Tests\Features;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Storage;
 use SignDeck\Veil\Tests\TestCase;
 use SignDeck\Veil\Veil;
@@ -121,6 +123,11 @@ class TestVeilPostsTable implements \SignDeck\Veil\Contracts\VeilTable
             'title' => 'Anonymized Title',
         ];
     }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
+    }
 }
 
 class NonExistentTable implements \SignDeck\Veil\Contracts\VeilTable
@@ -135,6 +142,11 @@ class NonExistentTable implements \SignDeck\Veil\Contracts\VeilTable
         return [
             'id' => \SignDeck\Veil\Veil::unchanged(),
         ];
+    }
+
+    public function query(): Builder|QueryBuilder|null
+    {
+        return null;
     }
 }
 
