@@ -326,12 +326,12 @@ class Veil
 
             $newValues = [];
 
-            // Build the row array with column names as keys for callable access
+            // Build the row array with ALL column names as keys for callable access
+            // This allows callables to access any column, not just the ones being exported
             $row = [];
-            foreach ($columnMapping as $columnName => $mapping) {
-                $originalIndex = $mapping['originalIndex'];
-                if (isset($values[$originalIndex])) {
-                    $row[$columnName] = Value::unformat($values[$originalIndex]);
+            foreach ($originalColumnNames as $index => $columnName) {
+                if (isset($values[$index])) {
+                    $row[$columnName] = Value::unformat($values[$index]);
                 }
             }
 
