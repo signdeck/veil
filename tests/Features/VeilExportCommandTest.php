@@ -98,5 +98,36 @@ class VeilExportCommandTest extends TestCase
         $this->assertStringStartsWith('veil_', $files[0]);
         $this->assertStringEndsWith('.sql', $files[0]);
     }
+
+    /** @test */
+    public function it_shows_preview_in_dry_run_mode(): void
+    {
+        config(['veil.tables' => [VeilUsersTable::class]]);
+
+        $this->seedUsers();
+
+        $this->artisan('veil:export', ['--dry-run' => true])
+            ->expectsOutput('🔍 DRY RUN MODE - No files will be created')
+            ->expectsOutputToContain('Preview:')
+            ->expectsOutputToContain('Table:')
+            ->assertSuccessful();
+
+        // Verify no file was created
+        $files = Storage::disk('veil')->files();
+        $this->assertEmpty($files);
+    }
+
+    /** @test */
+    public function it_shows_columns_and_row_count_in_dry_run(): void
+    {
+        config(['veil.tables' => [VeilUsersTable::class]]);
+
+        $this->seedUsers(5);
+
+        $this->artisan('veil:export', ['--dry-run' => true])
+            ->expectsOutputToContain('Columns to export:')
+            ->expectsOutputToContain('Estimated rows:')
+            ->assertSuccessful();
+    }
 }
 

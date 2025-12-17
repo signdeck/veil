@@ -60,6 +60,30 @@ class VeilTest extends TestCase
     }
 
     /** @test */
+    public function it_returns_preview_array_in_dry_run_mode(): void
+    {
+        $this->seedUsers(3);
+
+        config(['veil.tables' => [TestVeilUsersTable::class]]);
+
+        $veil = app(\SignDeck\Veil\Veil::class);
+        $veilDryRun = app(\SignDeck\Veil\VeilDryRun::class);
+        $preview = $veilDryRun->preview();
+
+        $this->assertIsArray($preview);
+        $this->assertNotEmpty($preview);
+        $this->assertArrayHasKey('name', $preview[0]);
+        $this->assertArrayHasKey('columns', $preview[0]);
+        $this->assertArrayHasKey('row_count', $preview[0]);
+        $this->assertEquals('users', $preview[0]['name']);
+        $this->assertEquals(3, $preview[0]['row_count']);
+
+        // Verify no file was created
+        $files = Storage::disk('veil')->files();
+        $this->assertEmpty($files);
+    }
+
+    /** @test */
     public function it_only_exports_columns_defined_in_veil_table(): void
     {
         $sql = $this->getMySqlDump();

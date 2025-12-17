@@ -190,6 +190,22 @@ php artisan veil:export --name=staging-export
 
 This will create `staging-export.sql` instead of the timestamped filename.
 
+### Dry Run Mode
+
+Preview what would be exported without actually creating the file:
+
+```bash
+php artisan veil:export --dry-run
+```
+
+This will show:
+- Which tables will be exported
+- Which columns will be included
+- Estimated row counts
+- What filename would be created
+
+No files are created in dry-run mode, making it safe to test your configuration.
+
 ## Configuration
 
 ```php

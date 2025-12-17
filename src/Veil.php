@@ -32,6 +32,7 @@ class Veil
      * Handle the export process.
      *
      * @param string|null $snapshotName Custom name for the snapshot. If null, uses timestamped name.
+     * @return string|null Snapshot filename or null
      */
     public function handle(?string $snapshotName = null): ?string
     {
@@ -58,7 +59,7 @@ class Veil
      *
      * @return VeilTable[]
      */
-    protected function resolveVeilTables(): array
+    public function resolveVeilTables(): array
     {
         $tables = config('veil.tables', []);
         $resolved = [];
