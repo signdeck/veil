@@ -64,4 +64,30 @@ class VeilMakeTableCommand extends GeneratorCommand
         
         return 'Veil' . Str::studly($table) . 'Table';
     }
+
+    /**
+     * Build the class with the given name.
+     *
+     * @param  string  $name
+     * @return string
+     */
+    protected function buildClass($name)
+    {
+        $stub = parent::buildClass($name);
+        
+        // Get the table name from the argument
+        $table = trim($this->argument('table'));
+        
+        // Remove "Veil" prefix and "Table" suffix if user included them
+        $table = preg_replace('/^Veil/', '', $table);
+        $table = preg_replace('/Table$/', '', $table);
+        
+        // Convert to lowercase to match database table naming conventions
+        $table = strtolower($table);
+        
+        // Replace DummyTableName with the actual table name (as a string literal)
+        $stub = str_replace('DummyTableName', "'{$table}'", $stub);
+        
+        return $stub;
+    }
 }

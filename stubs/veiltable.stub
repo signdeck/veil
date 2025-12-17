@@ -10,9 +10,12 @@ use SignDeck\Veil\Veil;
 
 class DummyClass implements VeilTable
 {
+    /**
+     * The name of the table
+     */
     public function table(): string
     {
-        // return 'users';
+        return DummyTableName;
     }
 
     /**
@@ -23,11 +26,11 @@ class DummyClass implements VeilTable
      */
     public function columns(): array
     {
-        // return [
-        //     'id' => Veil::unchanged(),                    // Keep original value
-        //     'email' => 'user@example.com',                // Replace with static value
-        //     'name' => fn ($original) => fake()->name(),   // Use Faker for unique values
-        // ];
+        return [
+            'id' => Veil::unchanged(),
+            'email' => 'user@example.com',
+            'name' => fn ($original) => fake()->name(),
+        ];
     }
 
     /**
@@ -37,7 +40,6 @@ class DummyClass implements VeilTable
      */
     public function query(): Builder|QueryBuilder|null
     {
-        // return DB::table('users')->where('created_at', '>', now()->subYear());
-        // return null; // Export all rows
+        return null;
     }
 }
