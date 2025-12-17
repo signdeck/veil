@@ -18,7 +18,7 @@
     ],
     "require": {
         "php": "^8.3",
-        "spatie/laravel-db-snapshots": "dev-main"
+        "spatie/laravel-db-snapshots": "^2.0"
     },
     "require-dev": {
         "orchestra/testbench": "^9.0",
@@ -40,6 +40,5 @@
                 "SignDeck\\Veil\\VeilServiceProvider"
             ]
         }
-    },
-    "minimum-stability": "dev"
+    }
 }
