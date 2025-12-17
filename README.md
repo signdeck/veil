@@ -190,7 +190,7 @@ php artisan veil:export --name=staging-export
 
 This will create `staging-export.sql` instead of the timestamped filename.
 
-### Dry Run Mode
+## Dry Run Mode
 
 Preview what would be exported without actually creating the file:
 
@@ -205,26 +205,6 @@ This will show:
 - What filename would be created
 
 No files are created in dry-run mode, making it safe to test your configuration.
-
-## Configuration
-
-```php
-// config/veil.php
-
-return [
-    // Tables to export
-    'tables' => [],
-
-    // Filesystem disk for storing exports (default: 'local')
-    'disk' => env('VEIL_DISK', 'local'),
-
-    // Compress the export with gzip (default: false)
-    'compress' => env('VEIL_COMPRESS', false),
-
-    // Database connection to use (default: null uses default connection)
-    'connection' => env('VEIL_CONNECTION', null),
-];
-```
 
 ## Security
 
