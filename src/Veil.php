@@ -39,7 +39,10 @@ class Veil
             return null;
         }
 
-        $tableNames = array_map(fn (VeilTable $table) => $table->table(), $veilTables);
+        $tableNames = array_map(
+            fn (VeilTable $table) => $table->table(), 
+            $veilTables
+        );
 
         $snapshot = $this->createSnapshot($tableNames);
 
@@ -183,7 +186,7 @@ class Veil
         preg_match_all($pattern, $valuesSection, $rowMatches);
 
         foreach ($rowMatches[1] as $rowValues) {
-            $values = $this->parseValues($rowValues);
+            $values = Value::parse($rowValues);
             $newValues = [];
 
             foreach ($columnMapping as $columnName => $mapping) {
@@ -202,9 +205,13 @@ class Veil
                 } elseif (strtoupper(trim($originalValue)) === 'NULL') {
                     // Preserve NULL values
                     $newValues[] = 'NULL';
+                } elseif (is_callable($anonymizedValue)) {
+                    // Execute callable and format the result
+                    $result = $anonymizedValue(Value::unformat($originalValue));
+                    $newValues[] = Value::format($result);
                 } else {
                     // Apply anonymization
-                    $newValues[] = $this->formatValue($anonymizedValue);
+                    $newValues[] = Value::format($anonymizedValue);
                 }
             }
 
@@ -214,83 +221,5 @@ class Veil
         }
 
         return implode(', ', $processedRows);
-    }
-
-    /**
-     * Parse comma-separated values, respecting quoted strings.
-     */
-    protected function parseValues(string $valueString): array
-    {
-        $values = [];
-        $current = '';
-        $inQuote = false;
-        $quoteChar = null;
-        $escaped = false;
-
-        for ($i = 0; $i < strlen($valueString); $i++) {
-            $char = $valueString[$i];
-
-            if ($escaped) {
-                $current .= $char;
-                $escaped = false;
-                continue;
-            }
-
-            if ($char === '\\') {
-                $current .= $char;
-                $escaped = true;
-                continue;
-            }
-
-            if (!$inQuote && ($char === '"' || $char === "'")) {
-                $inQuote = true;
-                $quoteChar = $char;
-                $current .= $char;
-                continue;
-            }
-
-            if ($inQuote && $char === $quoteChar) {
-                $inQuote = false;
-                $quoteChar = null;
-                $current .= $char;
-                continue;
-            }
-
-            if (!$inQuote && $char === ',') {
-                $values[] = trim($current);
-                $current = '';
-                continue;
-            }
-
-            $current .= $char;
-        }
-
-        if ($current !== '') {
-            $values[] = trim($current);
-        }
-
-        return $values;
-    }
-
-    /**
-     * Format a value for SQL insertion.
-     */
-    protected function formatValue(mixed $value): string
-    {
-        if ($value === null) {
-            return 'NULL';
-        }
-
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
-        }
-
-        if (is_numeric($value)) {
-            return (string) $value;
-        }
-
-        // Escape single quotes and wrap in quotes
-        $escaped = str_replace("'", "''", (string) $value);
-        return "'{$escaped}'";
     }
 }

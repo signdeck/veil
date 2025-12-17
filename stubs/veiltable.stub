@@ -14,13 +14,16 @@ class DummyClass implements VeilTable
 
     /**
      * Define the columns to export and their anonymized values.
-     * Use Veil::unchanged() to keep the original value.
+     *
+     * - Use Veil::unchanged() to keep the original value.
+     * - Use a callable to transform the value dynamically.
      */
     public function columns(): array
     {
         // return [
-        //     'id' => Veil::unchanged(),     // Keep original value
-        //     'email' => 'user@example.com', // Replace with this value
+        //     'id' => Veil::unchanged(),                    // Keep original value
+        //     'email' => 'user@example.com',                // Replace with static value
+        //     'name' => fn ($original) => fake()->name(),   // Use Faker for unique values
         // ];
     }
 }

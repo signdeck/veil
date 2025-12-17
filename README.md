@@ -82,6 +82,30 @@ public function columns(): array
 
 **Important:** Only columns defined in `columns()` will be included in the export. Any columns not listed will be excluded from the exported SQL.
 
+### Using Callables for Dynamic Values
+
+You can use closures or callables to generate unique values per row. The callable receives the original value as an argument:
+
+```php
+public function columns(): array
+{
+    return [
+        'id' => Veil::unchanged(),
+        
+        // Generate unique fake email for each row
+        'email' => fn ($original) => fake()->unique()->safeEmail(),
+        
+        // Transform the original value
+        'name' => fn ($original) => strtoupper($original),
+        
+        // Generate random data
+        'phone' => fn () => fake()->phoneNumber(),
+    ];
+}
+```
+
+This is useful when you need unique anonymized values per row instead of the same static value for all rows.
+
 ### 3. Register Your Tables
 
 Add your Veil table classes to `config/veil.php`:

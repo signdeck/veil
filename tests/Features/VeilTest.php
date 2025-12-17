@@ -179,6 +179,70 @@ class VeilTest extends TestCase
         $this->assertStringNotContainsString('INSERT INTO `users`', $result);
     }
 
+    /** @test */
+    public function it_executes_callable_values(): void
+    {
+        $sql = $this->getMySqlDump();
+
+        $veilTable = new CallableVeilTable();
+        $result = $this->callProcessTableInSql($sql, $veilTable);
+
+        // The callable should transform emails to uppercase
+        $this->assertStringContainsString('USER1@EXAMPLE.COM', $result);
+        $this->assertStringContainsString('USER2@EXAMPLE.COM', $result);
+        $this->assertStringContainsString('USER3@EXAMPLE.COM', $result);
+    }
+
+    /** @test */
+    public function callable_receives_original_value(): void
+    {
+        $sql = "INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'John Doe', 'john@example.com', 'secret');";
+
+        $veilTable = new CallableWithOriginalValueVeilTable();
+        $result = $this->callProcessTableInSql($sql, $veilTable);
+
+        // The callable should append to the original value
+        $this->assertStringContainsString('john@example.com.redacted', $result);
+    }
+
+    /** @test */
+    public function callable_can_return_different_values_per_row(): void
+    {
+        $sql = $this->getMySqlDump();
+
+        $counter = 0;
+        $veilTable = new class($counter) implements VeilTable {
+            private int $counter;
+
+            public function __construct(int &$counter)
+            {
+                $this->counter = &$counter;
+            }
+
+            public function table(): string
+            {
+                return 'users';
+            }
+
+            public function columns(): array
+            {
+                return [
+                    'id' => function ($original) {
+                        static $count = 100;
+                        return $count++;
+                    },
+                ];
+            }
+        };
+
+        $result = $this->callProcessTableInSql($sql, $veilTable);
+
+        // Each row should have a different ID
+        $this->assertStringContainsString('(100)', $result);
+        $this->assertStringContainsString('(101)', $result);
+        $this->assertStringContainsString('(102)', $result);
+    }
+
     /**
      * Helper to call the protected processTableInSql method.
      */
@@ -336,6 +400,38 @@ class EmptyColumnsVeilTable implements VeilTable
     public function columns(): array
     {
         return [];
+    }
+}
+
+class CallableVeilTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'email' => fn ($original) => strtoupper($original),
+        ];
+    }
+}
+
+class CallableWithOriginalValueVeilTable implements VeilTable
+{
+    public function table(): string
+    {
+        return 'users';
+    }
+
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),
+            'email' => fn ($original) => $original . '.redacted',
+        ];
     }
 }
 
