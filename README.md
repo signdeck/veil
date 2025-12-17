@@ -111,6 +111,55 @@ public function columns(): array
 
 This is useful when you need unique anonymized values per row or want to reference other columns in the transformation.
 
+### ⚠️ Foreign Key Consistency
+
+When exporting multiple related tables, **always use `Veil::unchanged()` for primary keys and foreign keys** to maintain referential integrity.
+
+```php
+// ✅ Correct - IDs are preserved, relationships remain intact
+class VeilUsersTable implements VeilTable
+{
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),      // Primary key - keep unchanged
+            'name' => 'John Doe',
+            'email' => 'user@example.com',
+        ];
+    }
+}
+
+class VeilPostsTable implements VeilTable
+{
+    public function columns(): array
+    {
+        return [
+            'id' => Veil::unchanged(),      // Primary key - keep unchanged
+            'user_id' => Veil::unchanged(), // Foreign key - keep unchanged
+            'title' => 'Anonymized Title',
+        ];
+    }
+}
+```
+
+```php
+// ❌ Wrong - This will break foreign key relationships
+class VeilUsersTable implements VeilTable
+{
+    public function columns(): array
+    {
+        return [
+            'id' => fn () => fake()->randomNumber(),  // Don't anonymize IDs!
+            'name' => 'John Doe',
+        ];
+    }
+}
+```
+
+**Why?** If you change a user's `id` from `1` to `999`, all their posts with `user_id = 1` will become orphaned because the foreign key no longer matches.
+
+**Rule of thumb:** Only anonymize data columns (names, emails, addresses), never identifier columns (IDs, UUIDs, foreign keys).
+
 ### 3. Register Your Tables
 
 Add your Veil table classes to `config/veil.php`:
