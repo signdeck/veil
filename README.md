@@ -1,12 +1,20 @@
 # Veil
 
+Veil is a Laravel package that helps you export database snapshots while anonymising sensitive columns.
 
-A Laravel package that helps export and anonymise database columns. Uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) under the hood.
+It’s useful when you need to:
+- Share production-like data with developers or contractors
+- Create safe database snapshots for local or staging environments
+- Debug real-world issues without exposing personal data
+- Comply with privacy and data protection requirements
 
-**Supports Laravel version 11+**
+Veil lets you define anonymisation rules per table and column, ensuring sensitive values are replaced consistently during export.
+
+It uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) under the hood and focuses on keeping the workflow simple and predictable.
 
 > "This package was created and maintained by the team behind [SignDeck — a lightweight e-signature platform for collecting documents and signatures.](https://getsigndeck.com)"
 
+**Supports Laravel version 11+**
 
 ## Installation
 
