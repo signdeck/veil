@@ -12,7 +12,7 @@ It’s useful when you need to:
 
 Veil lets you define anonymization rules per table and column, ensuring sensitive values are replaced consistently during export.
 
-It uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) under the hood and focuses on keeping the workflow simple and predictable.
+It uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) and [phpmyadmin/sql-parser](https://github.com/phpmyadmin/sql-parser) under the hood and focuses on keeping the workflow simple and predictable.
 
 > "This package was created and maintained by the team behind [SignDeck — a lightweight e-signature platform for collecting documents and signatures.](https://getsigndeck.com)"
 

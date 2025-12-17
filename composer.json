@@ -18,6 +18,7 @@
     ],
     "require": {
         "php": "^8.3",
+        "phpmyadmin/sql-parser": "^5.7",
         "spatie/laravel-db-snapshots": "^2.0"
     },
     "require-dev": {

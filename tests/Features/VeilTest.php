@@ -10,7 +10,9 @@ use ReflectionClass;
 use SignDeck\Veil\AsIs;
 use SignDeck\Veil\Contracts\VeilTable;
 use SignDeck\Veil\Exceptions\ContractImplementationException;
-use SignDeck\Veil\Tests\TestCase;
+use SignDeck\Veil\RowAnonymizer;
+use SignDeck\Veil\SchemaInspector;
+use SignDeck\Veil\SqlProcessor;
 use SignDeck\Veil\Tests\Tables\AnonymizedVeilTable;
 use SignDeck\Veil\Tests\Tables\CallableVeilTable;
 use SignDeck\Veil\Tests\Tables\CallableWithOriginalValueVeilTable;
@@ -24,6 +26,7 @@ use SignDeck\Veil\Tests\Tables\QuotedValueVeilTable;
 use SignDeck\Veil\Tests\Tables\RowAccessVeilTable;
 use SignDeck\Veil\Tests\Tables\TestVeilUsersTable;
 use SignDeck\Veil\Tests\Tables\UnchangedColumnsVeilTable;
+use SignDeck\Veil\Tests\TestCase;
 use SignDeck\Veil\Veil;
 use SignDeck\Veil\VeilDryRun;
 
@@ -358,9 +361,11 @@ class VeilTest extends TestCase
         $this->assertEquals([1], $allowedIds);
 
         // Test filtering in SQL processing
-        $processMethod = $reflection->getMethod('processTableInSql');
-        $processMethod->setAccessible(true);
-        $result = $processMethod->invoke($veil, $sql, $veilTable, $allowedIds);
+        $sqlProcessor = new SqlProcessor(
+            new SchemaInspector(),
+            new RowAnonymizer()
+        );
+        $result = $sqlProcessor->processTableInSql($sql, $veilTable, $allowedIds);
 
         // Should only contain user with id = 1 (filtered by query)
         $this->assertStringContainsString('(1,', $result);
@@ -374,11 +379,11 @@ class VeilTest extends TestCase
         $sql = $this->getMySqlDump();
         $veilTable = new TestVeilUsersTable();
 
-        $veil = app(Veil::class);
-        $reflection = new ReflectionClass($veil);
-        $method = $reflection->getMethod('processTableInSql');
-        $method->setAccessible(true);
-        $result = $method->invoke($veil, $sql, $veilTable, null);
+        $sqlProcessor = new SqlProcessor(
+            new SchemaInspector(),
+            new RowAnonymizer()
+        );
+        $result = $sqlProcessor->processTableInSql($sql, $veilTable, null);
 
         // Should contain all users when no filtering
         $this->assertStringContainsString('(1,', $result);
@@ -387,16 +392,16 @@ class VeilTest extends TestCase
     }
 
     /**
-     * Helper to call the protected processTableInSql method.
+     * Helper to call the SqlProcessor's processTableInSql method.
      */
     protected function callProcessTableInSql(string $sql, VeilTable $veilTable): string
     {
-        $veil = app(Veil::class);
-        $reflection = new ReflectionClass($veil);
-        $method = $reflection->getMethod('processTableInSql');
-        $method->setAccessible(true);
+        $sqlProcessor = new SqlProcessor(
+            new SchemaInspector(),
+            new RowAnonymizer()
+        );
 
-        return $method->invoke($veil, $sql, $veilTable);
+        return $sqlProcessor->processTableInSql($sql, $veilTable);
     }
 
     /**

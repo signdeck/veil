@@ -103,5 +103,49 @@ class VeilMakeTableCommandTest extends TestCase
 
         $this->assertStringContainsString('public function columns(): array', $contents);
     }
+
+    /** @test */
+    public function it_replaces_dummy_table_name_with_actual_table_name(): void
+    {
+        $this->artisan('veil:make-table', ['table' => 'users'])
+            ->assertSuccessful();
+
+        $expectedPath = app_path('Veil/VeilUsersTable.php');
+        $contents = File::get($expectedPath);
+
+        // Verify DummyTableName is replaced with the actual table name
+        $this->assertStringNotContainsString('DummyTableName', $contents);
+        $this->assertStringContainsString("return 'users';", $contents);
+    }
+
+    /** @test */
+    public function it_replaces_dummy_table_name_with_normalized_table_name(): void
+    {
+        // Test with snake_case table name
+        $this->artisan('veil:make-table', ['table' => 'order_items'])
+            ->assertSuccessful();
+
+        $expectedPath = app_path('Veil/VeilOrderItemsTable.php');
+        $contents = File::get($expectedPath);
+
+        // Verify the table name is correctly set (snake_case preserved)
+        $this->assertStringNotContainsString('DummyTableName', $contents);
+        $this->assertStringContainsString("return 'order_items';", $contents);
+    }
+
+    /** @test */
+    public function it_replaces_dummy_table_name_even_with_prefix_or_suffix(): void
+    {
+        // Test with Veil prefix and Table suffix
+        $this->artisan('veil:make-table', ['table' => 'VeilCustomersTable'])
+            ->assertSuccessful();
+
+        $expectedPath = app_path('Veil/VeilCustomersTable.php');
+        $contents = File::get($expectedPath);
+
+        // Verify DummyTableName is replaced and the table name is normalized
+        $this->assertStringNotContainsString('DummyTableName', $contents);
+        $this->assertStringContainsString("return 'customers';", $contents);
+    }
 }
 

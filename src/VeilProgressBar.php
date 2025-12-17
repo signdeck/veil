@@ -14,31 +14,26 @@ class VeilProgressBar
     public function __construct(?Command $command = null)
     {
         $this->command = $command;
-
-        if ($command) {
-            $this->progressBar = $command->getOutput()->createProgressBar(0);
-            $this->progressBar->setFormat(' %current%/%max% [%bar%] %percent:3s%% %message%');
-        }
     }
 
     /**
-     * Set the maximum number of steps.
+     * Start a new progress bar for processing a table.
      */
-    public function setMaxSteps(int $max): void
+    public function startForTable(string $tableName, int $rowCount): void
     {
-        if ($this->progressBar) {
-            $this->progressBar->setMaxSteps($max);
+        if (!$this->command) {
+            return;
         }
-    }
 
-    /**
-     * Start the progress bar.
-     */
-    public function start(): void
-    {
+        // Finish any existing progress bar
         if ($this->progressBar) {
-            $this->progressBar->start();
+            $this->progressBar->finish();
+            $this->command->newLine();
         }
+
+        $this->progressBar = $this->command->getOutput()->createProgressBar($rowCount);
+        $this->progressBar->setFormat(" Processing {$tableName}: %current%/%max% [%bar%] %percent:3s%%");
+        $this->progressBar->start();
     }
 
     /**
@@ -52,17 +47,7 @@ class VeilProgressBar
     }
 
     /**
-     * Set the message displayed next to the progress bar.
-     */
-    public function setMessage(string $message): void
-    {
-        if ($this->progressBar) {
-            $this->progressBar->setMessage($message);
-        }
-    }
-
-    /**
-     * Finish the progress bar.
+     * Finish the current progress bar.
      */
     public function finish(): void
     {
