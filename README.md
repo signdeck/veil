@@ -182,6 +182,14 @@ php artisan veil:export
 
 This will create a timestamped SQL file (e.g., `veil_2025-01-15_10-30-00.sql`) on your configured disk with all specified tables and anonymized column values.
 
+You can also specify a custom name for the export:
+
+```bash
+php artisan veil:export --name=staging-export
+```
+
+This will create `staging-export.sql` instead of the timestamped filename.
+
 ## Configuration
 
 ```php

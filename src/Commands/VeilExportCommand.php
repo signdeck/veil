@@ -12,7 +12,7 @@ class VeilExportCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'veil:export';
+    protected $signature = 'veil:export {--name= : Custom name for the snapshot file}';
 
     /**
      * The console command description.
@@ -44,7 +44,8 @@ class VeilExportCommand extends Command
         $this->newLine();
 
         try {
-            $fileName = $veil->handle();
+            $snapshotName = $this->option('name');
+            $fileName = $veil->handle($snapshotName);
 
             if ($fileName) {
                 $disk = config('veil.disk', 'local');

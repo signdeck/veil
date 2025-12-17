@@ -64,5 +64,39 @@ class VeilExportCommandTest extends TestCase
             ->expectsOutputToContain('Export completed successfully!')
             ->assertSuccessful();
     }
+
+    /** @test */
+    public function it_uses_custom_name_when_provided(): void
+    {
+        config(['veil.tables' => [VeilUsersTable::class]]);
+
+        $this->seedUsers();
+
+        $this->artisan('veil:export', ['--name' => 'staging-export'])
+            ->assertSuccessful();
+
+        $files = Storage::disk('veil')->files();
+
+        $this->assertNotEmpty($files);
+        $this->assertStringContainsString('staging-export', $files[0]);
+        $this->assertStringEndsWith('.sql', $files[0]);
+    }
+
+    /** @test */
+    public function it_uses_timestamped_name_when_no_custom_name_provided(): void
+    {
+        config(['veil.tables' => [VeilUsersTable::class]]);
+
+        $this->seedUsers();
+
+        $this->artisan('veil:export')
+            ->assertSuccessful();
+
+        $files = Storage::disk('veil')->files();
+
+        $this->assertNotEmpty($files);
+        $this->assertStringStartsWith('veil_', $files[0]);
+        $this->assertStringEndsWith('.sql', $files[0]);
+    }
 }
 

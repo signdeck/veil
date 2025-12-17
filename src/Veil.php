@@ -30,8 +30,10 @@ class Veil
 
     /**
      * Handle the export process.
+     *
+     * @param string|null $snapshotName Custom name for the snapshot. If null, uses timestamped name.
      */
-    public function handle(): ?string
+    public function handle(?string $snapshotName = null): ?string
     {
         $veilTables = $this->resolveVeilTables();
 
@@ -44,7 +46,7 @@ class Veil
             $veilTables
         );
 
-        $snapshot = $this->createSnapshot($tableNames);
+        $snapshot = $this->createSnapshot($tableNames, $snapshotName);
 
         $this->anonymizeSnapshot($snapshot, $veilTables);
 
@@ -78,10 +80,12 @@ class Veil
 
     /**
      * Create a snapshot using Spatie's SnapshotFactory.
+     *
+     * @param string|null $customName Custom name for the snapshot. If null, uses timestamped name.
      */
-    protected function createSnapshot(array $tableNames): string
+    protected function createSnapshot(array $tableNames, ?string $customName = null): string
     {
-        $snapshotName = 'veil_' . Carbon::now()->format('Y-m-d_H-i-s');
+        $snapshotName = $customName ?? 'veil_' . Carbon::now()->format('Y-m-d_H-i-s');
         $diskName = config('veil.disk', 'local');
         $connectionName = config('veil.connection') ?? config('database.default');
         $compress = config('veil.compress', false);

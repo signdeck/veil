@@ -44,6 +44,22 @@ class VeilTest extends TestCase
     }
 
     /** @test */
+    public function it_uses_custom_snapshot_name_when_provided(): void
+    {
+        $this->seedUsers();
+
+        config(['veil.tables' => [TestVeilUsersTable::class]]);
+
+        $veil = app(Veil::class);
+        $fileName = $veil->handle('custom-export-name');
+
+        $this->assertNotNull($fileName);
+        $this->assertStringContainsString('custom-export-name', $fileName);
+        $this->assertStringEndsWith('.sql', $fileName);
+        $this->assertTrue(Storage::disk('veil')->exists($fileName));
+    }
+
+    /** @test */
     public function it_only_exports_columns_defined_in_veil_table(): void
     {
         $sql = $this->getMySqlDump();
