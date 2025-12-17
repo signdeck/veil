@@ -10,6 +10,8 @@ use SignDeck\Veil\Contracts\VeilTable;
 use SignDeck\Veil\Events\ExportCompleted;
 use SignDeck\Veil\Events\ExportStarted;
 use SignDeck\Veil\Tests\TestCase;
+use SignDeck\Veil\Tests\Tables\TestVeilEventsPostsTable;
+use SignDeck\Veil\Tests\Tables\TestVeilEventsUsersTable;
 use SignDeck\Veil\Veil;
 
 class VeilEventsTest extends TestCase
@@ -114,7 +116,7 @@ class VeilEventsTest extends TestCase
     {
         $this->seedUsers();
 
-        config(['veil.tables' => [TestVeilUsersTable::class, TestVeilEventsPostsTable::class]]);
+        config(['veil.tables' => [TestVeilEventsUsersTable::class, TestVeilEventsPostsTable::class]]);
 
         $veil = app(Veil::class);
         $veil->handle();
@@ -145,47 +147,4 @@ class VeilEventsTest extends TestCase
     }
 }
 
-// Test table classes
-class TestVeilEventsUsersTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => \SignDeck\Veil\Veil::unchanged(),
-            'name' => 'Anonymized Name',
-            'email' => 'anonymized@example.com',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class TestVeilEventsPostsTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'posts';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => \SignDeck\Veil\Veil::unchanged(),
-            'title' => 'Anonymized Title',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
 

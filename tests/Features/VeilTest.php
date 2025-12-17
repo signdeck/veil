@@ -7,9 +7,25 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use ReflectionClass;
+use SignDeck\Veil\AsIs;
 use SignDeck\Veil\Contracts\VeilTable;
+use SignDeck\Veil\Exceptions\ContractImplementationException;
 use SignDeck\Veil\Tests\TestCase;
+use SignDeck\Veil\Tests\Tables\AnonymizedVeilTable;
+use SignDeck\Veil\Tests\Tables\CallableVeilTable;
+use SignDeck\Veil\Tests\Tables\CallableWithOriginalValueVeilTable;
+use SignDeck\Veil\Tests\Tables\EmptyColumnsVeilTable;
+use SignDeck\Veil\Tests\Tables\FilteredVeilTable;
+use SignDeck\Veil\Tests\Tables\MultiColumnRowAccessVeilTable;
+use SignDeck\Veil\Tests\Tables\NullableColumnsVeilTable;
+use SignDeck\Veil\Tests\Tables\NumericAnonymizedVeilTable;
+use SignDeck\Veil\Tests\Tables\PartialColumnsVeilTable;
+use SignDeck\Veil\Tests\Tables\QuotedValueVeilTable;
+use SignDeck\Veil\Tests\Tables\RowAccessVeilTable;
+use SignDeck\Veil\Tests\Tables\TestVeilUsersTable;
+use SignDeck\Veil\Tests\Tables\UnchangedColumnsVeilTable;
 use SignDeck\Veil\Veil;
+use SignDeck\Veil\VeilDryRun;
 
 class VeilTest extends TestCase
 {
@@ -69,8 +85,8 @@ class VeilTest extends TestCase
 
         config(['veil.tables' => [TestVeilUsersTable::class]]);
 
-        $veil = app(\SignDeck\Veil\Veil::class);
-        $veilDryRun = app(\SignDeck\Veil\VeilDryRun::class);
+        $veil = app(Veil::class);
+        $veilDryRun = app(VeilDryRun::class);
         $preview = $veilDryRun->preview();
 
         $this->assertIsArray($preview);
@@ -196,7 +212,7 @@ class VeilTest extends TestCase
     {
         config(['veil.tables' => [InvalidVeilTable::class]]);
 
-        $this->expectException(\SignDeck\Veil\Exceptions\ContractImplementationException::class);
+        $this->expectException(ContractImplementationException::class);
 
         $veil = app(Veil::class);
         $veil->handle();
@@ -207,7 +223,7 @@ class VeilTest extends TestCase
     {
         $result = Veil::unchanged();
 
-        $this->assertInstanceOf(\SignDeck\Veil\AsIs::class, $result);
+        $this->assertInstanceOf(AsIs::class, $result);
     }
 
     /** @test */
@@ -403,279 +419,7 @@ SQL;
     }
 }
 
-// Test VeilTable implementations
-
-class TestVeilUsersTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => 'test@example.com',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class PartialColumnsVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => 'test@example.com',
-            // name and password are intentionally excluded
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class AnonymizedVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => 'redacted@example.com',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class UnchangedColumnsVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => 'anon@test.com',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class NullableColumnsVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'created_at' => '2024-01-01 00:00:00',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class NumericAnonymizedVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => 999,
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class QuotedValueVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'name' => "O'Brien",
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class EmptyColumnsVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class CallableVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => fn ($original) => strtoupper($original),
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class CallableWithOriginalValueVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => fn ($original) => $original . '.redacted',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class RowAccessVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => fn ($original, $row) => "user{$row['id']}@example.com",
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class MultiColumnRowAccessVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'name' => fn ($original, $row) => "Anonymous User #{$row['id']}",
-            'email' => fn ($original, $row) => "anon{$row['id']}@example.com",
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class FilteredVeilTable implements VeilTable
-{
-    public function table(): string
-    {
-        return 'users';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => Veil::unchanged(),
-            'email' => 'redacted@example.com',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return DB::table('users')->where('id', 1);
-    }
-}
-
+// InvalidVeilTable kept inline as it doesn't implement VeilTable interface
 class InvalidVeilTable
 {
     // Does not implement VeilTable interface

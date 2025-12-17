@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Facades\Storage;
 use SignDeck\Veil\Tests\TestCase;
+use SignDeck\Veil\Tests\Tables\NonExistentTable;
+use SignDeck\Veil\Tests\Tables\TestVeilPostsTable;
+use SignDeck\Veil\Tests\Tables\VeilUsersTable;
 use SignDeck\Veil\Veil;
 use SignDeck\Veil\VeilDryRun;
 
@@ -37,7 +40,7 @@ class VeilDryRunTest extends TestCase
     {
         $this->seedUsers(5);
 
-        config(['veil.tables' => [\SignDeck\Veil\Tests\Tables\VeilUsersTable::class]]);
+        config(['veil.tables' => [VeilUsersTable::class]]);
 
         $veil = app(Veil::class);
         $veilDryRun = new VeilDryRun($veil);
@@ -57,7 +60,7 @@ class VeilDryRunTest extends TestCase
     {
         $this->seedUsers();
 
-        config(['veil.tables' => [\SignDeck\Veil\Tests\Tables\VeilUsersTable::class]]);
+        config(['veil.tables' => [VeilUsersTable::class]]);
 
         $veil = app(Veil::class);
         $veilDryRun = new VeilDryRun($veil);
@@ -75,7 +78,7 @@ class VeilDryRunTest extends TestCase
         $this->seedPosts(2);
 
         config(['veil.tables' => [
-            \SignDeck\Veil\Tests\Tables\VeilUsersTable::class,
+            VeilUsersTable::class,
             TestVeilPostsTable::class,
         ]]);
 
@@ -108,45 +111,4 @@ class VeilDryRunTest extends TestCase
     }
 }
 
-// Helper class for testing
-class TestVeilPostsTable implements \SignDeck\Veil\Contracts\VeilTable
-{
-    public function table(): string
-    {
-        return 'posts';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => \SignDeck\Veil\Veil::unchanged(),
-            'title' => 'Anonymized Title',
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
-
-class NonExistentTable implements \SignDeck\Veil\Contracts\VeilTable
-{
-    public function table(): string
-    {
-        return 'nonexistent_table';
-    }
-
-    public function columns(): array
-    {
-        return [
-            'id' => \SignDeck\Veil\Veil::unchanged(),
-        ];
-    }
-
-    public function query(): Builder|QueryBuilder|null
-    {
-        return null;
-    }
-}
 
