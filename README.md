@@ -1,5 +1,7 @@
 # Veil
 
+[![Tests](https://github.com/signdeck/veil/actions/workflows/tests.yml/badge.svg)](https://github.com/signdeck/veil/actions/workflows/tests.yml)
+
 Veil is a Laravel package that helps you export database snapshots while anonymizing sensitive columns.
 
 It’s useful when you need to:
