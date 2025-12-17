@@ -1,0 +1,45 @@
+{
+    "name": "signdeck/veil",
+    "description": "A laravel package to anonymize database exports",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Marvin Quezon",
+            "email": "quezon.marvin@gmail.com"
+        }
+    ],
+    "keywords": [
+        "Laravel",
+        "Database",
+        "MySQL",
+        "Data",
+        "Anonymize"
+    ],
+    "require": {
+        "php": "^8.3",
+        "spatie/laravel-db-snapshots": "dev-main"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0",
+        "phpunit/phpunit": "^10.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "SignDeck\\Veil\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SignDeck\\Veil\\Tests\\": "tests"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SignDeck\\Veil\\VeilServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev"
+}

@@ -1,0 +1,26 @@
+<?php
+
+namespace DummyNamespace;
+
+use SignDeck\Veil\Veil;
+use SignDeck\Veil\Contracts\VeilTable;
+
+class DummyClass implements VeilTable
+{
+    public function table(): string
+    {
+        // return 'users';
+    }
+
+    /**
+     * Define the columns to export and their anonymized values.
+     * Use Veil::unchanged() to keep the original value.
+     */
+    public function columns(): array
+    {
+        // return [
+        //     'id' => Veil::unchanged(),     // Keep original value
+        //     'email' => 'user@example.com', // Replace with this value
+        // ];
+    }
+}
