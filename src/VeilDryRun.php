@@ -3,7 +3,6 @@
 namespace SignDeck\Veil;
 
 use Illuminate\Support\Facades\DB;
-use SignDeck\Veil\Contracts\VeilTable;
 
 class VeilDryRun
 {

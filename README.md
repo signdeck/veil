@@ -235,6 +235,62 @@ php artisan veil:export --name=staging-export
 
 This will create `staging-export.sql` instead of the timestamped filename.
 
+## Events
+
+Veil fires events before and after the export process, allowing you to hook into the export lifecycle.
+
+### Available Events
+
+- **`SignDeck\Veil\Events\ExportStarted`** - Fired before the export begins
+- **`SignDeck\Veil\Events\ExportCompleted`** - Fired after the export completes
+
+### Listening to Events
+
+You can listen to these events in your `EventServiceProvider`:
+
+```php
+use SignDeck\Veil\Events\ExportStarted;
+use SignDeck\Veil\Events\ExportCompleted;
+
+protected $listen = [
+    ExportStarted::class => [
+        // Your listeners here
+    ],
+    ExportCompleted::class => [
+        // Your listeners here
+    ],
+];
+```
+
+### Event Properties
+
+**`ExportStarted`** event contains:
+- `$snapshotName` - The custom name provided (or `null` if using default)
+- `$tableNames` - Array of table names being exported
+
+**`ExportCompleted`** event contains:
+- `$fileName` - The filename of the created snapshot
+- `$snapshotName` - The custom name provided (or `null` if using default)
+- `$tableNames` - Array of table names that were exported
+
+### Example: Logging Exports
+
+```php
+use SignDeck\Veil\Events\ExportCompleted;
+use Illuminate\Support\Facades\Log;
+
+class LogExportCompleted
+{
+    public function handle(ExportCompleted $event): void
+    {
+        Log::info('Database export completed', [
+            'file' => $event->fileName,
+            'tables' => $event->tableNames,
+        ]);
+    }
+}
+```
+
 ## Dry Run Mode
 
 You can preview what would be exported without actually creating the file:

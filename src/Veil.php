@@ -7,7 +7,10 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use SignDeck\Veil\Contracts\VeilTable;
+use SignDeck\Veil\Events\ExportCompleted;
+use SignDeck\Veil\Events\ExportStarted;
 use SignDeck\Veil\Exceptions\ContractImplementationException;
 use Spatie\DbSnapshots\SnapshotFactory;
 
@@ -64,6 +67,9 @@ class Veil
             $veilTables
         );
 
+        // Fire pre-export event
+        Event::dispatch(new ExportStarted($snapshotName, $tableNames));
+
         if ($this->progressBar) {
             $this->progressBar->info('Creating database snapshot...');
         }
@@ -83,6 +89,9 @@ class Veil
             $this->progressBar->finish();
             $this->progressBar->newLine(2);
         }
+
+        // Fire post-export event
+        Event::dispatch(new ExportCompleted($snapshot, $snapshotName, $tableNames));
 
         return $snapshot;
     }
