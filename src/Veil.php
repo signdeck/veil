@@ -3,6 +3,7 @@
 namespace SignDeck\Veil;
 
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,8 @@ use Spatie\DbSnapshots\SnapshotFactory;
 class Veil
 {
     protected Filesystem $disk;
+
+    protected ?VeilProgressBar $progressBar = null;
 
     public function __construct(
         protected SnapshotFactory $snapshotFactory,
@@ -27,6 +30,19 @@ class Veil
     public static function unchanged(): AsIs
     {
         return new AsIs;
+    }
+
+    /**
+     * Set a progress bar for the export process.
+     *
+     * @param Command $command Command instance for progress updates
+     * @return $this
+     */
+    public function withProgressBar(Command $command): self
+    {
+        $this->progressBar = new VeilProgressBar($command);
+
+        return $this;
     }
 
     /**
@@ -48,9 +64,25 @@ class Veil
             $veilTables
         );
 
+        if ($this->progressBar) {
+            $this->progressBar->info('Creating database snapshot...');
+        }
+
         $snapshot = $this->createSnapshot($tableNames, $snapshotName);
 
+        if ($this->progressBar) {
+            $this->progressBar->info('Anonymizing data...');
+            $this->progressBar->setMaxSteps(count($veilTables));
+            $this->progressBar->setMessage('Processing tables');
+            $this->progressBar->start();
+        }
+
         $this->anonymizeSnapshot($snapshot, $veilTables);
+
+        if ($this->progressBar) {
+            $this->progressBar->finish();
+            $this->progressBar->newLine(2);
+        }
 
         return $snapshot;
     }
@@ -108,11 +140,19 @@ class Veil
      *
      * @param VeilTable[] $veilTables
      */
-    protected function anonymizeSnapshot(string $fileName, array $veilTables): void
-    {
+    protected function anonymizeSnapshot(
+        string $fileName, 
+        array $veilTables
+    ): void {
         $contents = $this->disk->get($fileName);
 
-        foreach ($veilTables as $veilTable) {
+        foreach ($veilTables as $index => $veilTable) {
+            if ($this->progressBar) {
+                $tableName = $veilTable->table();
+                $this->progressBar->setMessage("Processing {$tableName}");
+                $this->progressBar->advance();
+            }
+
             $allowedIds = $this->getAllowedIds($veilTable);
             $contents = $this->processTableInSql($contents, $veilTable, $allowedIds);
         }

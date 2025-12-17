@@ -129,5 +129,18 @@ class VeilExportCommandTest extends TestCase
             ->expectsOutputToContain('Estimated rows:')
             ->assertSuccessful();
     }
+
+    /** @test */
+    public function it_shows_progress_during_export(): void
+    {
+        config(['veil.tables' => [VeilUsersTable::class]]);
+
+        $this->seedUsers();
+
+        $this->artisan('veil:export')
+            ->expectsOutput('Creating database snapshot...')
+            ->expectsOutput('Anonymizing data...')
+            ->assertSuccessful();
+    }
 }
 

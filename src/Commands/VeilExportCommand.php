@@ -60,6 +60,7 @@ class VeilExportCommand extends Command
                 $preview = $veilDryRun->preview($snapshotName);
                 $this->displayDryRunPreview($preview);
             } else {
+                $veil->withProgressBar($this);
                 $fileName = $veil->handle($snapshotName);
 
                 if ($fileName) {
