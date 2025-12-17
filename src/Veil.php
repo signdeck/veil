@@ -214,6 +214,89 @@ class Veil
     }
 
     /**
+     * Get column names from CREATE TABLE statement in SQL dump.
+     */
+    protected function getColumnNamesFromCreateTable(string $sql, string $tableName): array
+    {
+        // Match CREATE TABLE statement for this table (handles multi-line)
+        $pattern = '/CREATE\s+TABLE\s+[`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*\(([^;]+)\)/is';
+        
+        if (preg_match($pattern, $sql, $matches)) {
+            $tableDefinition = $matches[1];
+            $columnNames = [];
+            
+            // Split by commas, but be careful with nested parentheses (e.g., in column definitions)
+            // Use a more sophisticated approach: track parentheses depth
+            $lines = [];
+            $current = '';
+            $depth = 0;
+            
+            for ($i = 0; $i < strlen($tableDefinition); $i++) {
+                $char = $tableDefinition[$i];
+                
+                if ($char === '(') {
+                    $depth++;
+                    $current .= $char;
+                } elseif ($char === ')') {
+                    $depth--;
+                    $current .= $char;
+                } elseif ($char === ',' && $depth === 0) {
+                    $lines[] = trim($current);
+                    $current = '';
+                } else {
+                    $current .= $char;
+                }
+            }
+            
+            if (!empty($current)) {
+                $lines[] = trim($current);
+            }
+            
+            // Extract column names, skipping constraints
+            foreach ($lines as $line) {
+                $line = trim($line);
+                
+                // Skip constraint definitions
+                if (preg_match('/^\s*(PRIMARY\s+KEY|UNIQUE\s+KEY|KEY|INDEX|FULLTEXT|SPATIAL|CONSTRAINT|FOREIGN\s+KEY)/i', $line)) {
+                    continue;
+                }
+                
+                // Extract column name (first identifier, handling backticks/quotes)
+                if (preg_match('/^[`"\']?(\w+)[`"\']?\s+/i', $line, $colMatch)) {
+                    $columnNames[] = $colMatch[1];
+                }
+            }
+            
+            return $columnNames;
+        }
+        
+        return [];
+    }
+
+    /**
+     * Get all column names for a table in their natural order from database schema.
+     */
+    protected function getTableColumnNames(string $tableName): array
+    {
+        try {
+            $connection = DB::connection();
+            $schema = $connection->getDoctrineSchemaManager();
+            $table = $schema->listTableDetails($tableName);
+            
+            return array_keys($table->getColumns());
+        } catch (\Exception $e) {
+            // Fallback: try to get columns from information schema
+            try {
+                $columns = DB::select("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ? AND TABLE_SCHEMA = DATABASE() ORDER BY ORDINAL_POSITION", [$tableName]);
+                return array_map(fn($col) => $col->COLUMN_NAME, $columns);
+            } catch (\Exception $e) {
+                // If all else fails, return empty array
+                return [];
+            }
+        }
+    }
+
+    /**
      * Process a specific table's data in the SQL dump.
      * Only exports columns defined in VeilTable::columns() and applies anonymization.
      *
@@ -227,7 +310,8 @@ class Veil
 
         if (empty($columns)) {
             // No columns defined means remove all INSERT statements for this table
-            $pattern = '/INSERT INTO [`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*\([^)]+\)\s*VALUES\s*.*?;/is';
+            // Pattern matches both formats: with and without column list
+            $pattern = '/INSERT INTO [`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*(?:\([^)]+\))?\s*VALUES\s*.*?;/is';
             return preg_replace($pattern, '', $sql);
         }
 
@@ -235,16 +319,29 @@ class Veil
         $exportColumnNames = array_keys($columns);
 
         // Find INSERT statements for this table and process them
-        // Pattern matches: INSERT INTO `table_name` (`col1`, `col2`, ...) VALUES (...), (...);
-        $pattern = '/INSERT INTO [`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*\(([^)]+)\)\s*VALUES\s*(.*?);/is';
+        // Pattern matches both formats:
+        // 1. INSERT INTO `table_name` (`col1`, `col2`, ...) VALUES (...), (...);
+        // 2. INSERT INTO `table_name` VALUES (...), (...);
+        $pattern = '/INSERT INTO [`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*(?:\(([^)]+)\))?\s*VALUES\s*(.*?);/is';
 
-        return preg_replace_callback($pattern, function ($matches) use ($columns, $tableName, $exportColumnNames, $allowedIds, $primaryKey) {
-            $columnList = $matches[1];
+        return preg_replace_callback($pattern, function ($matches) use ($columns, $tableName, $exportColumnNames, $allowedIds, $primaryKey, $sql) {
+            $columnList = $matches[1] ?? '';
             $valuesSection = $matches[2];
 
             // Parse column names from the original INSERT statement
-            preg_match_all('/[`"\']?(\w+)[`"\']?/', $columnList, $columnMatches);
-            $originalColumnNames = $columnMatches[1];
+            if (!empty($columnList)) {
+                // Column list provided in INSERT statement
+                preg_match_all('/[`"\']?(\w+)[`"\']?/', $columnList, $columnMatches);
+                $originalColumnNames = $columnMatches[1];
+            } else {
+                // No column list - get column names from CREATE TABLE statement in SQL dump
+                $originalColumnNames = $this->getColumnNamesFromCreateTable($sql, $tableName);
+                
+                // Fallback: try to get from database schema if available
+                if (empty($originalColumnNames)) {
+                    $originalColumnNames = $this->getTableColumnNames($tableName);
+                }
+            }
 
             // Build mapping: export column name => original column index
             $columnMapping = [];
@@ -326,12 +423,12 @@ class Veil
 
             $newValues = [];
 
-            // Build the row array with column names as keys for callable access
+            // Build the row array with ALL column names as keys for callable access
+            // This allows callables to access any column, not just the ones being exported
             $row = [];
-            foreach ($columnMapping as $columnName => $mapping) {
-                $originalIndex = $mapping['originalIndex'];
-                if (isset($values[$originalIndex])) {
-                    $row[$columnName] = Value::unformat($values[$originalIndex]);
+            foreach ($originalColumnNames as $index => $columnName) {
+                if (isset($values[$index])) {
+                    $row[$columnName] = Value::unformat($values[$index]);
                 }
             }
 
