@@ -1,6 +1,6 @@
 {
     "name": "signdeck/veil",
-    "description": "A laravel package to anonymize database exports",
+    "description": "Laravel package to anonymize database exports",
     "type": "library",
     "license": "MIT",
     "authors": [
