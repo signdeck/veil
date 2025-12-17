@@ -121,6 +121,35 @@ public function columns(): array
 
 This is useful when you need unique anonymized values per row or want to reference other columns in the transformation.
 
+### Static Values vs Callables
+
+Veil distinguishes between **static values** and **callables**:
+
+- **Static values** (strings, numbers, etc.) are used **as-is for all rows**:
+  ```php
+  'name' => 'John Doe',  // All rows will have "John Doe"
+  'status' => 'active',   // All rows will have "active"
+  ```
+
+- **Callables** (closures/functions) are **executed per row** to generate unique values:
+  ```php
+  'name' => fn () => fake()->name(),           // Different name for each row
+  'email' => fn () => fake()->unique()->email(), // Unique email for each row
+  ```
+
+**Important:** If you want to use Faker or other generators to create different values per row, you **must wrap them in a closure**:
+
+```php
+// ❌ Wrong - executes once, same value for all rows
+'first_name' => app(Generator::class)->firstName(),
+
+// ✅ Correct - executes per row, different value for each row
+'first_name' => fn () => app(Generator::class)->firstName(),
+// or
+'first_name' => fn () => fake()->firstName(),
+```
+
+
 ### ⚠️ Foreign Key Consistency
 
 When exporting multiple related tables, **always use `Veil::unchanged()` for primary keys and foreign keys** to maintain referential integrity.
