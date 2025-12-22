@@ -45,11 +45,8 @@ class SqlProcessor
 
         $exportColumnNames = array_keys($columns);
 
-        // Pre-fetch column names from database schema for INSERT statements without column lists
+        // Get column names from database schema for INSERT statements without column lists
         $defaultColumnNames = $this->schemaInspector->getTableColumnNames($tableName);
-        $createTableColumnNames = empty($defaultColumnNames)
-            ? $this->schemaInspector->getColumnNamesFromCreateTable($sql, $tableName)
-            : [];
 
         // Use regex to find INSERT statements for our table (memory-efficient)
         $pattern = '/INSERT\s+INTO\s+[`"\']?' . preg_quote($tableName, '/') . '[`"\']?\s*(?:\([^)]+\))?\s*VALUES\s*/is';
@@ -88,8 +85,7 @@ class SqlProcessor
                         $exportColumnNames,
                         $allowedIds,
                         $primaryKey,
-                        $defaultColumnNames,
-                        $createTableColumnNames
+                        $defaultColumnNames
                     );
 
                     $replacements[] = [
@@ -176,10 +172,9 @@ class SqlProcessor
         array $exportColumnNames,
         ?array $allowedIds,
         string $primaryKey,
-        array $defaultColumnNames,
-        array $createTableColumnNames
+        array $defaultColumnNames
     ): ?string {
-        $originalColumnNames = $this->extractColumnNamesFromStatement($statement, $defaultColumnNames, $createTableColumnNames);
+        $originalColumnNames = $this->extractColumnNamesFromStatement($statement, $defaultColumnNames);
 
         if (empty($originalColumnNames)) {
             return null;
@@ -238,8 +233,7 @@ class SqlProcessor
      */
     protected function extractColumnNamesFromStatement(
         InsertStatement $statement,
-        array $defaultColumnNames,
-        array $createTableColumnNames
+        array $defaultColumnNames
     ): array {
         if (! empty($statement->into->columns)) {
             $columnNames = [];
@@ -260,7 +254,7 @@ class SqlProcessor
             return $columnNames;
         }
 
-        return ! empty($defaultColumnNames) ? $defaultColumnNames : $createTableColumnNames;
+        return $defaultColumnNames;
     }
 
     /**
@@ -336,6 +330,90 @@ class SqlProcessor
         }
 
         return null;
+    }
+
+    /**
+     * Strip all non-INSERT statements from SQL, keeping only data export statements.
+     * Removes CREATE TABLE, DROP TABLE, ALTER TABLE, SET statements, LOCK/UNLOCK, and comments.
+     */
+    public function stripNonInsertStatements(string $sql): string
+    {
+        $lines = explode("\n", $sql);
+        $result = [];
+        $inMultiLineComment = false;
+        $inCreateTable = false;
+        $inAlterTable = false;
+        $parenDepth = 0;
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+
+            // Handle multi-line comments
+            if (preg_match('/\/\*/', $line)) {
+                $inMultiLineComment = true;
+            }
+            if (preg_match('/\*\//', $line)) {
+                $inMultiLineComment = false;
+                continue;
+            }
+            if ($inMultiLineComment) {
+                continue;
+            }
+
+            // Skip single-line comments
+            if (preg_match('/^\s*--/', $trimmed) || preg_match('/^\s*#/', $trimmed)) {
+                continue;
+            }
+
+            // Track CREATE TABLE statements (can span multiple lines)
+            if (preg_match('/^\s*CREATE\s+TABLE/i', $trimmed)) {
+                $inCreateTable = true;
+                $parenDepth = 0;
+            }
+            if ($inCreateTable) {
+                // Count parentheses to detect end of CREATE TABLE
+                $parenDepth += substr_count($line, '(') - substr_count($line, ')');
+                if ($parenDepth <= 0 && preg_match('/\)\s*;/', $trimmed)) {
+                    $inCreateTable = false;
+                }
+                continue;
+            }
+
+            // Track ALTER TABLE statements (can span multiple lines)
+            if (preg_match('/^\s*ALTER\s+TABLE/i', $trimmed)) {
+                $inAlterTable = true;
+            }
+            if ($inAlterTable) {
+                if (preg_match('/;\s*$/', $trimmed)) {
+                    $inAlterTable = false;
+                }
+                continue;
+            }
+
+            // Skip DROP TABLE statements
+            if (preg_match('/^\s*DROP\s+TABLE/i', $trimmed)) {
+                continue;
+            }
+
+            // Skip SET statements (like SET @OLD_CHARACTER_SET_CLIENT)
+            if (preg_match('/^\s*SET\s+/i', $trimmed)) {
+                continue;
+            }
+
+            // Skip LOCK/UNLOCK TABLES
+            if (preg_match('/^\s*(LOCK|UNLOCK)\s+TABLES/i', $trimmed)) {
+                continue;
+            }
+
+            // Keep INSERT statements and any other lines (to preserve formatting around INSERTs)
+            $result[] = $line;
+        }
+
+        // Join lines and clean up excessive blank lines
+        $cleaned = implode("\n", $result);
+        $cleaned = preg_replace('/\n{3,}/', "\n\n", $cleaned);
+
+        return trim($cleaned) . "\n";
     }
 }
 
