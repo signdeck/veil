@@ -2,15 +2,15 @@
 
 [![Tests](https://github.com/signdeck/veil/actions/workflows/tests.yml/badge.svg)](https://github.com/signdeck/veil/actions/workflows/tests.yml)
 
-Veil is a Laravel package that helps you export database snapshots while anonymizing sensitive columns.
+Veil is a Laravel package that helps you export database **data** to anonymize sensitive columns.
 
-It’s useful when you need to:
+It's useful when you need to:
 - Share production-like data with developers or contractors
-- Create safe database snapshots for local or staging environments
+- Create safe accurate data for local or staging environments
 - Debug real-world issues without exposing personal data
 - Comply with privacy and data protection requirements
 
-Veil lets you define anonymization rules per table and column, ensuring sensitive values are replaced consistently during export.
+Veil lets you define anonymization rules per table and column, ensuring sensitive values are replaced consistently during export. The exported SQL file contains only INSERT statements, making it easy to import into an existing database that already has the schema defined via Laravel migrations.
 
 It uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) and [phpmyadmin/sql-parser](https://github.com/phpmyadmin/sql-parser) under the hood and focuses on keeping the workflow simple and predictable.
 
@@ -120,22 +120,6 @@ public function columns(): array
 ```
 
 This is useful when you need unique anonymized values per row or want to reference other columns in the transformation.
-
-### Static Values vs Callables
-
-Veil distinguishes between **static values** and **callables**:
-
-- **Static values** (strings, numbers, etc.) are used **as-is for all rows**:
-  ```php
-  'name' => 'John Doe',  // All rows will have "John Doe"
-  'status' => 'active',   // All rows will have "active"
-  ```
-
-- **Callables** (closures/functions) are **executed per row** to generate unique values:
-  ```php
-  'name' => fn () => fake()->name(),           // Different name for each row
-  'email' => fn () => fake()->unique()->email(), // Unique email for each row
-  ```
 
 **Important:** If you want to use Faker or other generators to create different values per row, you **must wrap them in a closure**:
 
@@ -273,6 +257,23 @@ php artisan veil:export --name=staging-export
 ```
 
 This will create `staging-export.sql` instead of the timestamped filename.
+
+### What Gets Exported?
+
+**Veil exports data only**. It does **not** export:
+- CREATE TABLE statements
+- DROP TABLE statements
+- ALTER TABLE statements
+- Database schema definitions
+
+**Why?** Laravel manages database schema through migrations, so Veil focuses solely on exporting and anonymizing data. This approach:
+- Keeps exported files smaller and focused on data
+- Aligns with Laravel's migration-based schema management
+- Makes it easy to import data into existing databases that already have the schema
+
+**To use the exported data:**
+1. Ensure your target database has the schema (run migrations)
+2. Import the Veil export file to populate the data
 
 ## Events
 

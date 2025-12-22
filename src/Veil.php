@@ -168,6 +168,9 @@ class Veil
             $contents = $this->sqlProcessor->processTableInSql($contents, $veilTable, $allowedIds);
         }
 
+        // Strip all non-INSERT statements (CREATE TABLE, DROP TABLE, SET, etc.) to produce a data-only export
+        $contents = $this->sqlProcessor->stripNonInsertStatements($contents);
+
         $this->disk->put($fileName, $contents);
     }
 
