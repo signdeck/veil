@@ -391,6 +391,25 @@ class VeilTest extends TestCase
         $this->assertStringContainsString('(3,', $result);
     }
 
+    /** @test */
+    public function it_strips_create_table_with_engine_options(): void
+    {
+        $sql = $this->getMySqlDumpWithEngineOptions();
+
+        $veilTable = new TestVeilUsersTable();
+        $sqlProcessor = new SqlProcessor(
+            new SchemaInspector(),
+            new RowAnonymizer()
+        );
+
+        $result = $sqlProcessor->processTableInSql($sql, $veilTable);
+        $result = $sqlProcessor->stripNonInsertStatements($result);
+
+        $this->assertStringContainsString('INSERT INTO `users`', $result);
+        $this->assertStringNotContainsString('CREATE TABLE', $result);
+        $this->assertStringNotContainsString('ENGINE=InnoDB', $result);
+    }
+
     /**
      * Helper to call the SqlProcessor's processTableInSql method.
      */
@@ -418,6 +437,25 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   PRIMARY KEY (`id`)
 );
+
+INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'User 1', 'user1@example.com', 'secret123'), (2, 'User 2', 'user2@example.com', 'secret456'), (3, 'User 3', 'user3@example.com', 'secret789');
+SQL;
+    }
+
+    /**
+     * Get a sample MySQL dump with engine options (realistic mysqldump output).
+     */
+    protected function getMySqlDumpWithEngineOptions(): string
+    {
+        return <<<SQL
+-- MySQL dump
+CREATE TABLE `users` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'User 1', 'user1@example.com', 'secret123'), (2, 'User 2', 'user2@example.com', 'secret456'), (3, 'User 3', 'user3@example.com', 'secret789');
 SQL;

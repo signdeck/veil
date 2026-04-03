@@ -373,7 +373,7 @@ class SqlProcessor
             if ($inCreateTable) {
                 // Count parentheses to detect end of CREATE TABLE
                 $parenDepth += substr_count($line, '(') - substr_count($line, ')');
-                if ($parenDepth <= 0 && preg_match('/\)\s*;/', $trimmed)) {
+                if ($parenDepth <= 0 && str_ends_with($trimmed, ';')) {
                     $inCreateTable = false;
                 }
                 continue;
