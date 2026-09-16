@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/signdeck/veil/actions/workflows/tests.yml/badge.svg)](https://github.com/signdeck/veil/actions/workflows/tests.yml)
 
-Veil is a Laravel package that helps you export database **data** to anonymize sensitive columns.
+Veil is a Laravel package that helps you export database **data** with anonymized sensitive columns.
 
 It's useful when you need to:
 - Share production-like data with developers or contractors
@@ -12,11 +12,25 @@ It's useful when you need to:
 
 Veil lets you define anonymization rules per table and column, ensuring sensitive values are replaced consistently during export. The exported SQL file contains only INSERT statements, making it easy to import into an existing database that already has the schema defined via Laravel migrations.
 
-It uses [spatie/laravel-db-snapshots](https://github.com/spatie/laravel-db-snapshots) and [phpmyadmin/sql-parser](https://github.com/phpmyadmin/sql-parser) under the hood and focuses on keeping the workflow simple and predictable.
-
 > "This package was created and maintained by the team behind [SignDeck — a lightweight e-signature platform for collecting documents and signatures.](https://getsigndeck.com)"
 
-**Supports Laravel version 11+**
+## Version Compatibility
+
+| Veil | Laravel | PHP |
+|------|---------|-----|
+| 2.x  | 11.x, 12.x | 8.3+ |
+| 1.x  | 11.x   | 8.3+ |
+
+### What changed in v2
+
+Veil v2 is a complete rewrite of the export engine. The public API (your `VeilTable` classes, config, and artisan commands) is **unchanged** — no code changes are needed in your application.
+
+**Under the hood**, v2 replaces the `mysqldump` → parse → rewrite pipeline with a direct query-builder approach:
+
+- **Faster scoped exports** — `query()` scopes are now applied at the database level. In v1, `mysqldump` dumped all rows and filtering happened after the fact in PHP.
+- **Lower memory usage** — Data is read in chunks and streamed to the output file, instead of loading the entire SQL dump into memory.
+- **Fewer dependencies** — `spatie/laravel-db-snapshots` and `phpmyadmin/sql-parser` have been removed. Veil now only depends on Laravel's own Illuminate components.
+- **No `mysqldump` binary required** — The export runs entirely in PHP via Laravel's query builder.
 
 ## Installation
 
@@ -226,7 +240,7 @@ class VeilUsersTable implements VeilTable
 
 The query should return a Laravel query builder instance that filters the rows you want to export. Return `null` to export all rows.
 
-**Note:** Filtering is based on the primary key (usually `id`). The query is executed to get matching IDs, and only rows with those IDs are included in the export.
+In v2, the query scope is applied directly at the database level — only matching rows are read from the database. This makes scoped exports significantly faster on large tables compared to v1, which dumped all rows and filtered afterward.
 
 ### 3. Register Your Tables
 
@@ -309,7 +323,7 @@ protected $listen = [
 - `$tableNames` - Array of table names being exported
 
 **`ExportCompleted`** event contains:
-- `$fileName` - The filename of the created snapshot
+- `$fileName` - The filename of the created export
 - `$snapshotName` - The custom name provided (or `null` if using default)
 - `$tableNames` - Array of table names that were exported
 
@@ -346,6 +360,24 @@ This will show:
 - What filename would be created
 
 No files are created in dry-run mode, making it safe to test your configuration.
+
+## Upgrading from v1 to v2
+
+No changes to your application code are required. Your `VeilTable` classes, config file, and artisan commands work exactly the same.
+
+The only steps needed:
+
+1. Update the package:
+   ```bash
+   composer require signdeck/veil:^2.0
+   ```
+
+2. If you previously required `spatie/laravel-db-snapshots` solely for Veil, you can remove it:
+   ```bash
+   composer remove spatie/laravel-db-snapshots
+   ```
+
+3. The `mysqldump` binary is no longer required on your server.
 
 ## Security
 

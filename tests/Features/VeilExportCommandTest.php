@@ -138,8 +138,7 @@ class VeilExportCommandTest extends TestCase
         $this->seedUsers();
 
         $this->artisan('veil:export')
-            ->expectsOutput('Creating database snapshot...')
-            ->expectsOutput('Anonymizing data...')
+            ->expectsOutput('Exporting and anonymizing data...')
             ->assertSuccessful();
     }
 }

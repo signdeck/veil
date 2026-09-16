@@ -15,7 +15,7 @@ class VeilDryRun
     /**
      * Get preview data for dry-run mode.
      *
-     * @param string|null $snapshotName Custom name for the snapshot (for display purposes)
+     * @param  string|null  $snapshotName  Custom name for the snapshot (for display purposes)
      * @return array Preview data array
      */
     public function preview(?string $snapshotName = null): array
@@ -32,8 +32,8 @@ class VeilDryRun
             $tableName = $veilTable->table();
             $columns = $veilTable->columns();
 
-            // Get row count from database
-            $rowCount = $this->getTableRowCount($tableName);
+            $query = $veilTable->query() ?? DB::table($tableName);
+            $rowCount = $this->getRowCount($query);
 
             $preview[] = [
                 'name' => $tableName,
@@ -46,15 +46,14 @@ class VeilDryRun
     }
 
     /**
-     * Get the row count for a table.
+     * Get the row count for a query.
      */
-    protected function getTableRowCount(string $tableName): int
+    protected function getRowCount($query): int
     {
         try {
-            return DB::table($tableName)->count();
+            return (clone $query)->count();
         } catch (\Exception $e) {
             return 0;
         }
     }
 }
-
