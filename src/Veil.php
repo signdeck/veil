@@ -6,12 +6,12 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use SignDeck\Veil\Contracts\VeilTable;
 use SignDeck\Veil\Events\ExportCompleted;
 use SignDeck\Veil\Events\ExportStarted;
 use SignDeck\Veil\Exceptions\ContractImplementationException;
-use Spatie\DbSnapshots\SnapshotFactory;
 
 class Veil
 {
@@ -19,22 +19,14 @@ class Veil
 
     protected VeilProgressBar $progressBar;
 
-    protected SchemaInspector $schemaInspector;
-
-    protected SqlProcessor $sqlProcessor;
+    protected RowAnonymizer $rowAnonymizer;
 
     public function __construct(
-        protected SnapshotFactory $snapshotFactory,
         protected FilesystemFactory $filesystemFactory,
     ) {
         $this->disk = $this->filesystemFactory->disk(config('veil.disk', 'local'));
         $this->progressBar = new VeilProgressBar();
-        $this->schemaInspector = new SchemaInspector();
-        $this->sqlProcessor = new SqlProcessor(
-            $this->schemaInspector,
-            new RowAnonymizer(),
-            $this->progressBar
-        );
+        $this->rowAnonymizer = new RowAnonymizer();
     }
 
     /**
@@ -54,7 +46,6 @@ class Veil
     public function withProgressBar(Command $command): self
     {
         $this->progressBar = new VeilProgressBar($command);
-        $this->sqlProcessor->setProgressBar($this->progressBar);
 
         return $this;
     }
@@ -78,24 +69,24 @@ class Veil
             $veilTables
         );
 
-        // Fire pre-export event
         Event::dispatch(new ExportStarted($snapshotName, $tableNames));
 
-        $this->progressBar->info('Creating database snapshot...');
+        $fileName = ($snapshotName ?? 'veil_' . Carbon::now()->format('Y-m-d_H-i-s')) . '.sql';
 
-        $snapshot = $this->createSnapshot($tableNames, $snapshotName);
+        $this->progressBar->info('Exporting and anonymizing data...');
 
-        $this->progressBar->info('Anonymizing data...');
-
-        $this->anonymizeSnapshot($snapshot, $veilTables);
+        $this->exportTables($fileName, $veilTables);
 
         $this->progressBar->finish();
         $this->progressBar->newLine(2);
 
-        // Fire post-export event
-        Event::dispatch(new ExportCompleted($snapshot, $snapshotName, $tableNames));
+        if (config('veil.compress', false)) {
+            $fileName = $this->compressFile($fileName);
+        }
 
-        return $snapshot;
+        Event::dispatch(new ExportCompleted($fileName, $snapshotName, $tableNames));
+
+        return $fileName;
     }
 
     /**
@@ -124,75 +115,94 @@ class Veil
     }
 
     /**
-     * Create a snapshot using Spatie's SnapshotFactory.
-     *
-     * @param  string|null  $customName  Custom name for the snapshot. If null, uses timestamped name.
-     */
-    protected function createSnapshot(array $tableNames, ?string $customName = null): string
-    {
-        $snapshotName = $customName ?? 'veil_' . Carbon::now()->format('Y-m-d_H-i-s');
-        $diskName = config('veil.disk', 'local');
-        $connectionName = config('veil.connection') ?? config('database.default');
-        $compress = config('veil.compress', false);
-
-        $snapshot = $this->snapshotFactory->create(
-            $snapshotName,
-            $diskName,
-            $connectionName,
-            $compress,
-            $tableNames,
-        );
-
-        return $snapshot->fileName;
-    }
-
-    /**
-     * Anonymize the snapshot by replacing column values in the SQL dump.
+     * Export all tables to the SQL file.
      *
      * @param  VeilTable[]  $veilTables
      */
-    protected function anonymizeSnapshot(
-        string $fileName,
-        array $veilTables
-    ): void {
-        $contents = $this->disk->get($fileName);
+    protected function exportTables(string $fileName, array $veilTables): void
+    {
+        $tempPath = tempnam(sys_get_temp_dir(), 'veil_');
+        $handle = fopen($tempPath, 'w');
 
         foreach ($veilTables as $veilTable) {
-            $tableName = $veilTable->table();
-            $allowedIds = $this->getAllowedIds($veilTable);
-
-            // Get row count for progress bar
-            $rowCount = $this->schemaInspector->getTableRowCount($tableName, $allowedIds);
-            $this->progressBar->startForTable($tableName, $rowCount);
-
-            $contents = $this->sqlProcessor->processTableInSql($contents, $veilTable, $allowedIds);
+            $this->exportTable($handle, $veilTable);
         }
 
-        // Strip all non-INSERT statements (CREATE TABLE, DROP TABLE, SET, etc.) to produce a data-only export
-        $contents = $this->sqlProcessor->stripNonInsertStatements($contents);
+        fclose($handle);
 
-        $this->disk->put($fileName, $contents);
+        $this->disk->writeStream($fileName, fopen($tempPath, 'r'));
+
+        unlink($tempPath);
     }
 
     /**
-     * Get allowed IDs based on the query scope.
-     *
-     * @return array|null Array of allowed IDs, or null if no filtering
+     * Export a single table's data, anonymized, to the file handle.
      */
-    protected function getAllowedIds(VeilTable $veilTable): ?array
+    protected function exportTable($handle, VeilTable $veilTable): void
     {
-        $query = $veilTable->query();
+        $tableName = $veilTable->table();
+        $columns = $veilTable->columns();
 
-        if (! $query) {
-            return null;
+        if (empty($columns)) {
+            return;
         }
 
-        $tableName = $veilTable->table();
+        $exportColumnNames = array_keys($columns);
 
-        // Get the primary key column name (default to 'id')
-        $primaryKey = $this->schemaInspector->getPrimaryKeyColumn($tableName);
+        $query = $veilTable->query() ?? DB::table($tableName);
 
-        // Execute the query and get IDs
-        return $query->pluck($primaryKey)->toArray();
+        $rowCount = $this->getRowCount($query);
+        $this->progressBar->startForTable($tableName, $rowCount);
+
+        $columnList = implode(', ', array_map(fn ($col) => "`{$col}`", $exportColumnNames));
+
+        $query->orderBy(DB::raw(1))->chunk(500, function ($rows) use ($handle, $tableName, $columns, $columnList) {
+            $processedRows = [];
+
+            foreach ($rows as $row) {
+                $rowArray = (array) $row;
+
+                $this->progressBar->advance();
+
+                $values = $this->rowAnonymizer->anonymizeRow($rowArray, $columns);
+
+                if (! empty($values)) {
+                    $processedRows[] = '(' . implode(', ', $values) . ')';
+                }
+            }
+
+            if (! empty($processedRows)) {
+                $insert = "INSERT INTO `{$tableName}` ({$columnList}) VALUES " . implode(', ', $processedRows) . ";\n";
+                fwrite($handle, $insert);
+            }
+        });
+    }
+
+    /**
+     * Get the row count for a query.
+     */
+    protected function getRowCount($query): int
+    {
+        try {
+            return (clone $query)->count();
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Compress the export file using gzip.
+     *
+     * @return string The new filename with .gz extension
+     */
+    protected function compressFile(string $fileName): string
+    {
+        $contents = $this->disk->get($fileName);
+        $compressedFileName = $fileName . '.gz';
+
+        $this->disk->put($compressedFileName, gzencode($contents, 9));
+        $this->disk->delete($fileName);
+
+        return $compressedFileName;
     }
 }

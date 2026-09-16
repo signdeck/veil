@@ -4,15 +4,10 @@ namespace SignDeck\Veil\Tests\Features;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use ReflectionClass;
 use SignDeck\Veil\AsIs;
 use SignDeck\Veil\Contracts\VeilTable;
 use SignDeck\Veil\Exceptions\ContractImplementationException;
-use SignDeck\Veil\RowAnonymizer;
-use SignDeck\Veil\SchemaInspector;
-use SignDeck\Veil\SqlProcessor;
 use SignDeck\Veil\Tests\Tables\AnonymizedVeilTable;
 use SignDeck\Veil\Tests\Tables\CallableVeilTable;
 use SignDeck\Veil\Tests\Tables\CallableWithOriginalValueVeilTable;
@@ -51,7 +46,7 @@ class VeilTest extends TestCase
     }
 
     /** @test */
-    public function it_creates_snapshot_file(): void
+    public function it_creates_export_file(): void
     {
         $this->seedUsers();
 
@@ -62,6 +57,7 @@ class VeilTest extends TestCase
 
         $this->assertNotNull($fileName);
         $this->assertStringStartsWith('veil_', $fileName);
+        $this->assertStringEndsWith('.sql', $fileName);
         $this->assertTrue(Storage::disk('veil')->exists($fileName));
     }
 
@@ -108,31 +104,29 @@ class VeilTest extends TestCase
     /** @test */
     public function it_only_exports_columns_defined_in_veil_table(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new PartialColumnsVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [PartialColumnsVeilTable::class]]);
 
-        // Extract just the INSERT statement for checking
-        preg_match('/INSERT INTO.*?;/s', $result, $matches);
-        $insertStatement = $matches[0] ?? '';
+        $result = $this->exportAndGetContents();
 
         // Should contain only id and email columns in INSERT
-        $this->assertStringContainsString('`id`', $insertStatement);
-        $this->assertStringContainsString('`email`', $insertStatement);
+        $this->assertStringContainsString('`id`', $result);
+        $this->assertStringContainsString('`email`', $result);
 
         // Should NOT contain name or password columns in INSERT
-        $this->assertStringNotContainsString('`name`', $insertStatement);
-        $this->assertStringNotContainsString('`password`', $insertStatement);
+        $this->assertStringNotContainsString('`name`', $result);
+        $this->assertStringNotContainsString('`password`', $result);
     }
 
     /** @test */
     public function it_anonymizes_columns_with_specified_values(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new AnonymizedVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [AnonymizedVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Original emails should be replaced
         $this->assertStringNotContainsString('user1@example.com', $result);
@@ -145,10 +139,11 @@ class VeilTest extends TestCase
     /** @test */
     public function it_keeps_original_values_when_using_veil_unchanged(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new UnchangedColumnsVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [UnchangedColumnsVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Original IDs should be preserved (1, 2, 3)
         $this->assertStringContainsString('(1,', $result);
@@ -162,10 +157,18 @@ class VeilTest extends TestCase
     /** @test */
     public function it_preserves_null_values(): void
     {
-        $sql = "INSERT INTO `users` (`id`, `name`, `email`, `created_at`) VALUES (1, 'Test', 'test@example.com', NULL);";
+        // Insert a row with NULL created_at
+        $this->app['db']->table('users')->insert([
+            'name' => 'Test',
+            'email' => 'test@example.com',
+            'password' => 'secret',
+            'created_at' => null,
+            'updated_at' => null,
+        ]);
 
-        $veilTable = new NullableColumnsVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [NullableColumnsVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // NULL values should be preserved
         $this->assertStringContainsString('NULL', $result);
@@ -174,25 +177,27 @@ class VeilTest extends TestCase
     /** @test */
     public function it_handles_multiple_rows(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new TestVeilUsersTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [TestVeilUsersTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Should have INSERT statement
         $this->assertStringContainsString('INSERT INTO `users`', $result);
 
-        // Should have multiple value groups
+        // Should have the anonymized email for each row
         $this->assertStringContainsString('test@example.com', $result);
     }
 
     /** @test */
     public function it_handles_numeric_values_correctly(): void
     {
-        $sql = "INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'User 1', 'user1@example.com', 'secret');";
+        $this->seedUsers(1);
 
-        $veilTable = new NumericAnonymizedVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [NumericAnonymizedVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Numeric value should not be quoted
         $this->assertStringContainsString('(999)', $result);
@@ -201,13 +206,14 @@ class VeilTest extends TestCase
     /** @test */
     public function it_escapes_single_quotes_in_anonymized_values(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new QuotedValueVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [QuotedValueVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Single quote should be escaped
-        $this->assertStringContainsString("O''Brien", $result);
+        $this->assertStringContainsString("O\\'Brien", $result);
     }
 
     /** @test */
@@ -230,24 +236,26 @@ class VeilTest extends TestCase
     }
 
     /** @test */
-    public function it_removes_insert_statements_when_columns_array_is_empty(): void
+    public function it_produces_empty_file_when_columns_array_is_empty(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new EmptyColumnsVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [EmptyColumnsVeilTable::class]]);
 
-        // INSERT statements should be removed
+        $result = $this->exportAndGetContents();
+
+        // No INSERT statements should be generated for empty columns
         $this->assertStringNotContainsString('INSERT INTO `users`', $result);
     }
 
     /** @test */
     public function it_executes_callable_values(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new CallableVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [CallableVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // The callable should transform emails to uppercase
         $this->assertStringContainsString('USER1@EXAMPLE.COM', $result);
@@ -258,10 +266,15 @@ class VeilTest extends TestCase
     /** @test */
     public function callable_receives_original_value(): void
     {
-        $sql = "INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'John Doe', 'john@example.com', 'secret');";
+        $this->app['db']->table('users')->insert([
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'secret',
+        ]);
 
-        $veilTable = new CallableWithOriginalValueVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [CallableWithOriginalValueVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // The callable should append to the original value
         $this->assertStringContainsString('john@example.com.redacted', $result);
@@ -270,7 +283,7 @@ class VeilTest extends TestCase
     /** @test */
     public function callable_can_return_different_values_per_row(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
         $counter = 0;
         $veilTable = new class($counter) implements VeilTable {
@@ -302,7 +315,11 @@ class VeilTest extends TestCase
             }
         };
 
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        // Bind the anonymous class so it can be resolved
+        app()->instance(get_class($veilTable), $veilTable);
+        config(['veil.tables' => [get_class($veilTable)]]);
+
+        $result = $this->exportAndGetContents();
 
         // Each row should have a different ID
         $this->assertStringContainsString('(100)', $result);
@@ -313,10 +330,11 @@ class VeilTest extends TestCase
     /** @test */
     public function callable_can_access_other_columns_via_row_parameter(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new RowAccessVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [RowAccessVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Email should be formatted using the id from the row
         $this->assertStringContainsString('user1@example.com', $result);
@@ -327,10 +345,11 @@ class VeilTest extends TestCase
     /** @test */
     public function callable_can_combine_multiple_row_values(): void
     {
-        $sql = $this->getMySqlDump();
+        $this->seedUsers();
 
-        $veilTable = new MultiColumnRowAccessVeilTable();
-        $result = $this->callProcessTableInSql($sql, $veilTable);
+        config(['veil.tables' => [MultiColumnRowAccessVeilTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Name should be formatted using id
         $this->assertStringContainsString('Anonymous User #1', $result);
@@ -341,31 +360,11 @@ class VeilTest extends TestCase
     /** @test */
     public function it_filters_rows_based_on_query_scope(): void
     {
-        // Insert test data
-        $this->app['db']->table('users')->insert([
-            ['id' => 1, 'name' => 'User 1', 'email' => 'user1@example.com', 'password' => 'secret'],
-            ['id' => 2, 'name' => 'User 2', 'email' => 'user2@example.com', 'password' => 'secret'],
-            ['id' => 3, 'name' => 'User 3', 'email' => 'user3@example.com', 'password' => 'secret'],
-        ]);
+        $this->seedUsers();
 
-        $sql = $this->getMySqlDump();
-        $veilTable = new FilteredVeilTable();
+        config(['veil.tables' => [FilteredVeilTable::class]]);
 
-        // Get allowed IDs from query
-        $veil = app(Veil::class);
-        $reflection = new ReflectionClass($veil);
-        $method = $reflection->getMethod('getAllowedIds');
-        $method->setAccessible(true);
-        $allowedIds = $method->invoke($veil, $veilTable);
-
-        $this->assertEquals([1], $allowedIds);
-
-        // Test filtering in SQL processing
-        $sqlProcessor = new SqlProcessor(
-            new SchemaInspector(),
-            new RowAnonymizer()
-        );
-        $result = $sqlProcessor->processTableInSql($sql, $veilTable, $allowedIds);
+        $result = $this->exportAndGetContents();
 
         // Should only contain user with id = 1 (filtered by query)
         $this->assertStringContainsString('(1,', $result);
@@ -374,16 +373,13 @@ class VeilTest extends TestCase
     }
 
     /** @test */
-    public function it_exports_all_rows_when_query_not_defined(): void
+    public function it_exports_all_rows_when_query_returns_null(): void
     {
-        $sql = $this->getMySqlDump();
-        $veilTable = new TestVeilUsersTable();
+        $this->seedUsers();
 
-        $sqlProcessor = new SqlProcessor(
-            new SchemaInspector(),
-            new RowAnonymizer()
-        );
-        $result = $sqlProcessor->processTableInSql($sql, $veilTable, null);
+        config(['veil.tables' => [TestVeilUsersTable::class]]);
+
+        $result = $this->exportAndGetContents();
 
         // Should contain all users when no filtering
         $this->assertStringContainsString('(1,', $result);
@@ -392,73 +388,29 @@ class VeilTest extends TestCase
     }
 
     /** @test */
-    public function it_strips_create_table_with_engine_options(): void
+    public function it_produces_only_insert_statements(): void
     {
-        $sql = $this->getMySqlDumpWithEngineOptions();
+        $this->seedUsers();
 
-        $veilTable = new TestVeilUsersTable();
-        $sqlProcessor = new SqlProcessor(
-            new SchemaInspector(),
-            new RowAnonymizer()
-        );
+        config(['veil.tables' => [TestVeilUsersTable::class]]);
 
-        $result = $sqlProcessor->processTableInSql($sql, $veilTable);
-        $result = $sqlProcessor->stripNonInsertStatements($result);
+        $result = $this->exportAndGetContents();
 
-        $this->assertStringContainsString('INSERT INTO `users`', $result);
+        // Should only contain INSERT statements
+        $this->assertStringContainsString('INSERT INTO', $result);
         $this->assertStringNotContainsString('CREATE TABLE', $result);
-        $this->assertStringNotContainsString('ENGINE=InnoDB', $result);
+        $this->assertStringNotContainsString('DROP TABLE', $result);
     }
 
     /**
-     * Helper to call the SqlProcessor's processTableInSql method.
+     * Export using Veil and return the file contents.
      */
-    protected function callProcessTableInSql(string $sql, VeilTable $veilTable): string
+    protected function exportAndGetContents(): string
     {
-        $sqlProcessor = new SqlProcessor(
-            new SchemaInspector(),
-            new RowAnonymizer()
-        );
+        $veil = app(Veil::class);
+        $fileName = $veil->handle('test-export');
 
-        return $sqlProcessor->processTableInSql($sql, $veilTable);
-    }
-
-    /**
-     * Get a sample MySQL dump for testing.
-     */
-    protected function getMySqlDump(): string
-    {
-        return <<<SQL
--- MySQL dump
-CREATE TABLE `users` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`)
-);
-
-INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'User 1', 'user1@example.com', 'secret123'), (2, 'User 2', 'user2@example.com', 'secret456'), (3, 'User 3', 'user3@example.com', 'secret789');
-SQL;
-    }
-
-    /**
-     * Get a sample MySQL dump with engine options (realistic mysqldump output).
-     */
-    protected function getMySqlDumpWithEngineOptions(): string
-    {
-        return <<<SQL
--- MySQL dump
-CREATE TABLE `users` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `name` varchar(255) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'User 1', 'user1@example.com', 'secret123'), (2, 'User 2', 'user2@example.com', 'secret456'), (3, 'User 3', 'user3@example.com', 'secret789');
-SQL;
+        return Storage::disk('veil')->get($fileName);
     }
 }
 

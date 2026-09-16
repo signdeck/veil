@@ -4,7 +4,6 @@ namespace SignDeck\Veil\Tests;
 
 use Orchestra\Testbench\TestCase as Orchestra;
 use SignDeck\Veil\VeilServiceProvider;
-use Spatie\DbSnapshots\DbSnapshotsServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
@@ -18,7 +17,6 @@ abstract class TestCase extends Orchestra
     protected function getPackageProviders($app): array
     {
         return [
-            DbSnapshotsServiceProvider::class,
             VeilServiceProvider::class,
         ];
     }
@@ -39,8 +37,6 @@ abstract class TestCase extends Orchestra
 
         $app['config']->set('veil.disk', 'veil');
         $app['config']->set('veil.tables', []);
-        
-        $app['config']->set('db-snapshots.disk', 'veil');
     }
 
     protected function setUpDatabase(): void
@@ -88,4 +84,3 @@ abstract class TestCase extends Orchestra
         }
     }
 }
-
