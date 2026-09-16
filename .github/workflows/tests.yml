@@ -30,7 +30,9 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress
+        run: |
+          composer config --no-interaction policy.advisories.block false
+          composer update --prefer-stable --prefer-dist --no-interaction --no-progress
 
       - name: Run tests
         run: vendor/bin/phpunit
